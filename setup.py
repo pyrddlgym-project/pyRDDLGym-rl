@@ -17,7 +17,7 @@ from setuptools import setup, find_packages
 
 setup(
       name='pyRDDLGym-rl',
-      version='0.0.0',
+      version='0.1',
       author="Michael Gimelfarb, Ayal Taitler, Scott Sanner",
       author_email="mike.gimelfarb@mail.utoronto.ca, ataitler@gmail.com, ssanner@mie.utoronto.ca",
       description="pyRDDLGym-rl: Wrappers for reinforcement learning algorithms (i.e. stable baselines 3) to work with pyRDDLGym.",
