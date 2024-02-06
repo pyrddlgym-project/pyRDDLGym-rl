@@ -24,7 +24,11 @@ setup(
       license="MIT License",
       url="https://github.com/pyrddlgym-project/pyRDDLGym-rl",
       packages=find_packages(),
-      install_requires=['pyRDDLGym>=2.0.0', 'rddlrepository', 'stable-baselines3'],
+      install_requires=[
+          'gym>=0.24.0', 
+          'numpy>=1.22', 
+          'stable-baselines3>=2.2.1'
+        ],
       python_requires=">=3.8",
       package_data={'': ['*.cfg']},
       include_package_data=True,
