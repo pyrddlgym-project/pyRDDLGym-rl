@@ -1,5 +1,5 @@
-import gym
-from gym.spaces import Box, Dict, Discrete, MultiDiscrete
+import gymnasium
+from gymnasium.spaces import Box, Dict, Discrete, MultiDiscrete
 import numpy as np
 import typing
 
@@ -57,11 +57,7 @@ class StableBaselinesRDDLEnv(RDDLEnv):
         self.enforce_action_constraints = enforce_action_constraints
         self.enforce_count_non_bool = enforce_action_count_non_bool
         self.reward_scale = reward_scale
-        
-        # needed for parent class
-        self.new_gym_api = True
         self.vectorized = True
-        self.compact_action_space = True
         
         # read and parse domain and instance
         reader = RDDLReader(domain, instance)
@@ -214,7 +210,8 @@ class StableBaselinesRDDLEnv(RDDLEnv):
         
         # real space
         if count_cont:
-            cont_space = Box(np.asarray(cont_low), np.asarray(cont_high), dtype=np.float32)
+            cont_space = Box(np.asarray(cont_low), np.asarray(cont_high), 
+                             dtype=np.float32)
         else:
             cont_space = None
         
@@ -288,7 +285,7 @@ class StableBaselinesRDDLEnv(RDDLEnv):
     
     def step(self, actions):
         actions = self._gym_to_rddl_actions(actions)
-        obs, reward, done, out_of_bounds, info = \
+        obs, reward, terminated, truncated, info = \
             super(StableBaselinesRDDLEnv, self).step(actions)
         reward = reward * self.reward_scale
-        return obs, reward, done, out_of_bounds, info
+        return obs, reward, terminated, truncated, info
