@@ -20,9 +20,9 @@ from pyRDDLGym.core.simulator import RDDLSimulator
 from pyRDDLGym.core.visualizer.chart import ChartVisualizer
 
     
-class StableBaselinesRDDLEnv(RDDLEnv):
+class SimplifiedActionRDDLEnv(RDDLEnv):
     '''A gym environment class for RDDL domains, modified to compact the
-    action space for stable-baselines.'''
+    action space to avoid the use of Dict space.'''
     
     def __init__(self, domain: str,
                  instance: str,
@@ -286,6 +286,6 @@ class StableBaselinesRDDLEnv(RDDLEnv):
     def step(self, actions):
         actions = self._gym_to_rddl_actions(actions)
         obs, reward, terminated, truncated, info = \
-            super(StableBaselinesRDDLEnv, self).step(actions)
+            super(SimplifiedActionRDDLEnv, self).step(actions)
         reward = reward * self.reward_scale
         return obs, reward, terminated, truncated, info

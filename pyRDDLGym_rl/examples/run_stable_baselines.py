@@ -16,8 +16,8 @@ from stable_baselines3 import *
 
 import pyRDDLGym
 
-from pyRDDLGym_rl.stable_baselines.env import StableBaselinesRDDLEnv
-from pyRDDLGym_rl.stable_baselines.agent import StableBaselinesAgent
+from pyRDDLGym_rl.core.agent import StableBaselinesAgent
+from pyRDDLGym_rl.core.env import SimplifiedActionRDDLEnv
 
 METHODS = {'a2c': A2C, 'ddpg': DDPG, 'dqn': DQN, 'ppo': PPO, 'sac': SAC, 
            'td3': TD3}
@@ -26,7 +26,7 @@ def main(domain, instance, method, steps=200000, learning_rate=None):
     
     # set up the environment
     env = pyRDDLGym.make(domain, instance, 
-                         base_class=StableBaselinesRDDLEnv,
+                         base_class=SimplifiedActionRDDLEnv,
                          enforce_action_constraints=True)
     
     # train the PPO agent
