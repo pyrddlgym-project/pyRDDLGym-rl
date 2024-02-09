@@ -25,8 +25,6 @@ setup(
       url="https://github.com/pyrddlgym-project/pyRDDLGym-rl",
       packages=find_packages(),
       install_requires=[
-          'gymnasium', 
-          'numpy>=1.24.3',
           'pyRDDLGym>=2.0.0'
         ],
       python_requires=">=3.8",
