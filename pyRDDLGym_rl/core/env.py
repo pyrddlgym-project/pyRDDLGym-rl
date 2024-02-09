@@ -32,8 +32,7 @@ class SimplifiedActionRDDLEnv(RDDLEnv):
                  log_path: str=None,
                  backend: RDDLSimulator=RDDLSimulator,
                  backend_kwargs: typing.Dict={},
-                 seeds: RDDLEnvSeeder=RDDLEnvSeederFibonacci(),
-                 reward_scale: float=1.0):
+                 seeds: RDDLEnvSeeder=RDDLEnvSeederFibonacci()):
         '''Creates a new gym environment from the given RDDL domain + instance.
         
         :param domain: the RDDL domain
@@ -50,13 +49,11 @@ class SimplifiedActionRDDLEnv(RDDLEnv):
         :param backend_kwargs: dictionary of additional named arguments to
         pass to backend (must not include logger)
         :param seeds: an instance of RDDLEnvSeeder for generating RNG seeds
-        :param reward_scale: scale factor for immediate rewards
         '''
         self.domain_text = domain
         self.instance_text = instance
         self.enforce_action_constraints = enforce_action_constraints
         self.enforce_count_non_bool = enforce_action_count_non_bool
-        self.reward_scale = reward_scale
         self.vectorized = True
         
         # read and parse domain and instance
@@ -285,7 +282,4 @@ class SimplifiedActionRDDLEnv(RDDLEnv):
     
     def step(self, actions):
         actions = self._gym_to_rddl_actions(actions)
-        obs, reward, terminated, truncated, info = \
-            super(SimplifiedActionRDDLEnv, self).step(actions)
-        reward = reward * self.reward_scale
-        return obs, reward, terminated, truncated, info
+        return super(SimplifiedActionRDDLEnv, self).step(actions)
