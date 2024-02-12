@@ -18,7 +18,7 @@ To run the basic examples you will need ``pyRDDLGym>=2.0``, ``rddlrepository>=2.
 - ``stable-baselines3>=2.2.1``
 - ``ray[rllib]>=2.9.2``
 
-You can install this package, together with all of its requirements as follows
+You can install this package, together with all of its requirements as follows (assuming Anaconda):
 
 ```shell
 # Create a new conda environment
