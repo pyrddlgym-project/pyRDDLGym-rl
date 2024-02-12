@@ -47,7 +47,7 @@ A pip installer will be coming soon.
 To run the stable-baselines3 example, navigate to the install directory of pyRDDLGym-rl, and type:
 
 ```shell
-python -m pyRDDLGym_rl.examples.run_stable_baselines <domain> <instance> <method> [<steps>] [<learning_rate>]
+python -m pyRDDLGym_rl.examples.run_stable_baselines <domain> <instance> <method> <steps> <learning_rate>
 ```
 
 where:
@@ -62,7 +62,7 @@ where:
 To run the RLlib example, from the install directory of pyRDDLGym-rl, type:
 
 ```shell
-python -m pyRDDLGym_rl.examples.run_rllib <domain> <instance> <method> [<iters>]
+python -m pyRDDLGym_rl.examples.run_rllib <domain> <instance> <method> <iters>
 ```
 
 where:
