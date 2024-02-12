@@ -24,8 +24,7 @@ You can install this package, together with all of its requirements as follows
 # Create a new conda environment
 conda create -n rl python=3.11
 conda activate rl
-conda install pip
-conda install git
+conda install pip git
 
 # Install the RL package of your choice (or both)
 pip install stable-baselines3
