@@ -21,17 +21,11 @@ To run the basic examples you will need ``pyRDDLGym>=2.0``, ``rddlrepository>=2.
 You can install this package, together with all of its requirements (in Anaconda) via pypi:
 
 ```shell
-# Create a new conda environment
 conda create -n rlenv python=3.11
 conda activate rlenv
-
-# Install prerequisites
-pip install pyRDDLGym rddlrepository
-pip install stable-baselines3
+pip install stable-baselines3  # need one of these two
 pip install -U "ray[rllib]"
-
-# Install pyRDDLGym-rl
-pip install pyRDDLGym-rl
+pip install rddlrepository pyRDDLGym-rl
 ```
 
 ## Running the Basic Examples
