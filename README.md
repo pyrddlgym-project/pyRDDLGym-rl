@@ -18,11 +18,9 @@ To run the basic examples you will need ``pyRDDLGym>=2.0``, ``rddlrepository>=2.
 - ``stable-baselines3>=2.2.1``
 - ``ray[rllib]>=2.9.2``
 
-You can install this package, together with all of its requirements (in Anaconda) via pypi:
+You can install this package, together with all of its requirements via pip:
 
 ```shell
-conda create -n rlenv python=3.11
-conda activate rlenv
 pip install stable-baselines3  # need one of these two
 pip install -U "ray[rllib]"
 pip install rddlrepository pyRDDLGym-rl
