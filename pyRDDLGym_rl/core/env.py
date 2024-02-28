@@ -15,7 +15,6 @@ from pyRDDLGym.core.debug.logger import Logger, SimLogger
 from pyRDDLGym.core.env import RDDLEnv
 from pyRDDLGym.core.parser.parser import RDDLParser
 from pyRDDLGym.core.parser.reader import RDDLReader
-from pyRDDLGym.core.seeding import RDDLEnvSeeder, RDDLEnvSeederFibonacci
 from pyRDDLGym.core.simulator import RDDLSimulator
 from pyRDDLGym.core.visualizer.chart import ChartVisualizer
 
@@ -31,8 +30,7 @@ class SimplifiedActionRDDLEnv(RDDLEnv):
                  debug: bool=False,
                  log_path: str=None,
                  backend: RDDLSimulator=RDDLSimulator,
-                 backend_kwargs: typing.Dict={},
-                 seeds: RDDLEnvSeeder=RDDLEnvSeederFibonacci()):
+                 backend_kwargs: typing.Dict={}):
         '''Creates a new gym environment from the given RDDL domain + instance.
         
         :param domain: the RDDL domain
@@ -48,7 +46,6 @@ class SimplifiedActionRDDLEnv(RDDLEnv):
         simulation (currently supports numpy and Jax)
         :param backend_kwargs: dictionary of additional named arguments to
         pass to backend (must not include logger)
-        :param seeds: an instance of RDDLEnvSeeder for generating RNG seeds
         '''
         self.domain_text = domain
         self.instance_text = instance
@@ -117,7 +114,6 @@ class SimplifiedActionRDDLEnv(RDDLEnv):
         self.trial = 0
         self.timestep = 0
         self.done = False
-        self.seeds = iter(seeds)
     
     def _rddl_to_gym_bounds_act(self, ranges):
         
