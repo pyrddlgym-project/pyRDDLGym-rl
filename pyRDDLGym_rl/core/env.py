@@ -84,7 +84,7 @@ class SimplifiedActionRDDLEnv(RDDLEnv):
         
         # compute the bounds on fluents from the constraints
         self._bounds = RDDLConstraints(self.sampler, vectorized=True).bounds
-        self._shapes = {var: np.shape(values[0]) 
+        self._shapes = {var: np.shape(np.atleast_1d(values[0])) 
                         for (var, values) in self._bounds.items()}
         
         # construct the gym observation space
@@ -137,18 +137,17 @@ class SimplifiedActionRDDLEnv(RDDLEnv):
         disc_start, disc_nelem = [], []
         cont_low, cont_high = [], []
         for (var, prange) in ranges.items():
-            shape = self._shapes[var]
-            num_elements = np.prod(shape, dtype=np.int64)  
+            num_elements = np.prod(self._shapes[var], dtype=np.int64)  
             
             # boolean actions without constraint are stored as Discrete
             if prange == 'bool':
                 if bool_constraint:
-                    locational[var] = ('discrete', (count_bool, num_elements, shape))
+                    locational[var] = ('discrete', (count_bool, num_elements))
                     count_bool += num_elements
                 else:
                     disc_start.extend([0] * num_elements)
                     disc_nelem.extend([2] * num_elements)  
-                    locational[var] = ('discrete', (count_disc, num_elements, shape))
+                    locational[var] = ('discrete', (count_disc, num_elements))
                     count_disc += num_elements
             
             # integer actions are stored as Discrete
@@ -160,7 +159,7 @@ class SimplifiedActionRDDLEnv(RDDLEnv):
                 high = np.minimum(high, np.iinfo(np.int32).max).astype(np.int32)
                 disc_start.extend(low.tolist())
                 disc_nelem.extend((high - low + 1).tolist())                
-                locational[var] = ('discrete', (count_disc, num_elements, shape))
+                locational[var] = ('discrete', (count_disc, num_elements))
                 count_disc += num_elements
             
             # enum-valued actions are stored as Discrete
@@ -168,7 +167,7 @@ class SimplifiedActionRDDLEnv(RDDLEnv):
                 num_objects = len(self.model.type_to_objects[prange])
                 disc_start.extend([0] * num_elements)
                 disc_nelem.extend([num_objects] * num_elements)
-                locational[var] = ('discrete', (count_disc, num_elements, shape))
+                locational[var] = ('discrete', (count_disc, num_elements))
                 count_disc += num_elements
             
             # real actions are stored as Box
@@ -178,7 +177,7 @@ class SimplifiedActionRDDLEnv(RDDLEnv):
                 high = np.ravel(high, order='C').tolist()
                 cont_low.extend(low)
                 cont_high.extend(high)
-                locational[var] = ('continuous', (count_cont, num_elements, shape))
+                locational[var] = ('continuous', (count_cont, num_elements))
                 count_cont += num_elements
             
             # not a valid action type
@@ -224,9 +223,9 @@ class SimplifiedActionRDDLEnv(RDDLEnv):
         # log information
         if self.logger is not None:
             act_info = '\n\t'.join(
-                f'{act}: action_tensor={key}, '
-                f'start={start}, count={count}, shape={shape}'
-                for (act, (key, (start, count, shape))) in locational.items())
+                f'{act}: action_tensor={key}, start={start}, count={count}'
+                for (act, (key, (start, count))) in locational.items()
+            )
             bound_info = (f'\tdiscrete_start={disc_start}, '
                           f'discrete_n={disc_nelem}\n'
                           f'\tcontinuous_low={cont_low}, '
@@ -242,13 +241,16 @@ class SimplifiedActionRDDLEnv(RDDLEnv):
     def _gym_to_rddl_actions(self, gym_actions):
         locational, keys, bool_constraint, disc_start = self._action_info
         if len(keys) == 1:
-            gym_actions = {keys[0]: gym_actions}  
+            if isinstance(gym_actions, dict):
+                gym_actions = gym_actions['action']
+            gym_actions = {keys[0]: gym_actions}
+        noop_actions = self.sampler.noop_actions
         
         # process all actions except if active max-nondef-actions constraint
         actions = {}
         for (var, prange) in self._action_ranges.items():
             if not (bool_constraint and prange == 'bool'):
-                key, (start, count, shape) = locational[var]
+                key, (start, count) = locational[var]
                 action_key = gym_actions.get(key, None)
                 if action_key is not None:
                     action = np.atleast_1d(action_key)[start:start + count]
@@ -256,8 +258,9 @@ class SimplifiedActionRDDLEnv(RDDLEnv):
                         action = action + disc_start[start:start + count]
                     dtype = RDDLValueInitializer.NUMPY_TYPES.get(
                         prange, RDDLValueInitializer.INT)
+                    correct_shape = np.shape(noop_actions[var])
                     actions[var] = np.reshape(
-                        action, newshape=shape, order='C').astype(dtype)
+                        action, newshape=correct_shape, order='C').astype(dtype)
         
         # process the active max-nondef-actions constraint
         action_key = gym_actions.get('discrete', None)
@@ -265,13 +268,14 @@ class SimplifiedActionRDDLEnv(RDDLEnv):
             index = np.atleast_1d(action_key)[-1]
             for (var, prange) in self._action_ranges.items():
                 if prange == 'bool':
-                    _, (start, count, shape) = locational[var]                    
+                    _, (start, count) = locational[var]                    
                     index_in_var = index - start
                     if 0 <= index_in_var < count:
                         default_value = self.model.variable_defaults[var]
                         action = np.full(shape=count, fill_value=default_value, dtype=bool)
                         action[index_in_var] ^= True
-                        actions[var] = np.reshape(action, newshape=shape, order='C')
+                        correct_shape = np.shape(noop_actions[var])
+                        actions[var] = np.reshape(action, newshape=correct_shape, order='C')
                         break
             
         return actions

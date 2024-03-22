@@ -9,8 +9,11 @@ class StableBaselinesAgent(BaseAgent):
         self.deterministic = deterministic
         
     def sample_action(self, state):
-        return self.model.predict(state, deterministic=self.deterministic)[0]
-    
+        actions = self.model.predict(state, deterministic=self.deterministic)[0]
+        if not isinstance(actions, dict):
+            actions = {'action': actions}
+        return actions
+
 
 class RLLibAgent(BaseAgent):
     use_tensor_obs = True
@@ -19,5 +22,7 @@ class RLLibAgent(BaseAgent):
         self.algo = algo
         
     def sample_action(self, state):
-        return self.algo.compute_single_action(state)
-    
+        actions = self.algo.compute_single_action(state)
+        if not isinstance(actions, dict):
+            actions = {'action': actions}
+        return actions
