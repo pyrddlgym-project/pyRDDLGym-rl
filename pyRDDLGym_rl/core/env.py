@@ -12,7 +12,7 @@ from pyRDDLGym.core.debug.exception import (
     RDDLTypeError
 )
 from pyRDDLGym.core.debug.logger import Logger, SimLogger
-from pyRDDLGym.core.env import RDDLEnv
+from pyRDDLGym.core.env import RDDLEnv, _make_dir
 from pyRDDLGym.core.parser.parser import RDDLParser
 from pyRDDLGym.core.parser.reader import RDDLReader
 from pyRDDLGym.core.simulator import RDDLSimulator
