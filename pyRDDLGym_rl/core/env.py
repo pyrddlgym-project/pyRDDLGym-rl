@@ -27,7 +27,7 @@ class SimplifiedActionRDDLEnv(RDDLEnv):
                  instance: str,
                  enforce_action_constraints: bool=False,
                  enforce_action_count_non_bool: bool=True,
-                 debug: bool=False,
+                 debug_path: str=None,
                  log_path: str=None,
                  backend: RDDLSimulator=RDDLSimulator,
                  backend_kwargs: typing.Dict={}):
@@ -39,7 +39,8 @@ class SimplifiedActionRDDLEnv(RDDLEnv):
         action constraints are violated
         :param enforce_action_count_non_bool: whether to include non-bool actions
         in check that number of nondef actions don't exceed max-nondef-actions
-        :param debug: whether to log compilation information to a log file
+        :param debug_path: absolute path to file where debug log is saved,
+        excluding the file extension, None means no debugging
         :param log_path: absolute path to file where simulation log is saved,
         excluding the file extension, None means no logging
         :param backend: the subclass of RDDLSimulator to use as backend for
@@ -67,9 +68,10 @@ class SimplifiedActionRDDLEnv(RDDLEnv):
         self.max_allowed_actions = self.model.max_allowed_actions 
                 
         # for logging compilation data
-        log_fname = f'{self.model.domain_name}_{self.model.instance_name}'
-        logger = Logger(f'{log_fname}_debug.log') if debug else None
-        self.logger = logger
+        self.logger = None
+        if debug_path is not None and debug_path:
+            new_debug_path = _make_dir(debug_path)
+            self.logger = Logger(f'{new_debug_path}.log')
         
         # for logging simulation data
         self.simlogger = None
@@ -79,7 +81,7 @@ class SimplifiedActionRDDLEnv(RDDLEnv):
             self.simlogger.clear(overwrite=False)
         
         # define the simulation backend  
-        self.sampler = backend(self.model, logger=logger, keep_tensors=True,
+        self.sampler = backend(self.model, logger=self.logger, keep_tensors=True,
                                **backend_kwargs)
         
         # compute the bounds on fluents from the constraints
