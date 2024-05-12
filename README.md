@@ -4,6 +4,9 @@ Author: [Mike Gimelfarb](https://mike-gimelfarb.github.io)
 
 This repository provides wrappers for deep reinforcement learning algorithms (i.e. Stable Baselines 3 and RLlib) to work with pyRDDLGym.
 
+> [!NOTE]  
+> If your environment has differentiable dynamics and a differentiable reward, try the gradient-based [JAX planner](https://github.com/pyrddlgym-project/pyRDDLGym-jax).
+
 ## Contents
 
 - [Installation](#installation)
