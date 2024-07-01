@@ -29,8 +29,8 @@ class SimplifiedActionRDDLEnv(RDDLEnv):
                  enforce_action_count_non_bool: bool=True,
                  debug_path: str=None,
                  log_path: str=None,
-                 backend: RDDLSimulator=RDDLSimulator,
-                 backend_kwargs: typing.Dict={}):
+                 backend: typing.Type=RDDLSimulator,
+                 backend_kwargs: typing.Dict={}) -> None:
         '''Creates a new gym environment from the given RDDL domain + instance.
         
         :param domain: the RDDL domain
