@@ -14,13 +14,17 @@
 
 from setuptools import setup, find_packages
 
+from pathlib import Path
+long_description = (Path(__file__).parent / "README.md").read_text()
 
 setup(
       name='pyRDDLGym-rl',
-      version='0.1',
+      version='0.2',
       author="Michael Gimelfarb, Ayal Taitler, Scott Sanner",
       author_email="mike.gimelfarb@mail.utoronto.ca, ataitler@gmail.com, ssanner@mie.utoronto.ca",
       description="pyRDDLGym-rl: Wrappers for reinforcement learning algorithms (i.e. stable baselines 3) to work with pyRDDLGym.",
+      long_description=long_description,
+      long_description_content_type='text/markdown',
       license="MIT License",
       url="https://github.com/pyrddlgym-project/pyRDDLGym-rl",
       packages=find_packages(),
@@ -31,7 +35,7 @@ setup(
       package_data={'': ['*.cfg']},
       include_package_data=True,
       classifiers=[
-        "Development Status :: 3 - Alpha",
+        "Development Status :: 4 - Beta",
         "Intended Audience :: Science/Research",
         "License :: OSI Approved :: MIT License",
         "Natural Language :: English",
