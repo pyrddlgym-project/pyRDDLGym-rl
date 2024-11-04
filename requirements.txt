@@ -1,1 +1,1 @@
-pyRDDLGym>=2.0
+pyRDDLGym>=2.1

@@ -17,7 +17,7 @@ This repository provides wrappers for deep reinforcement learning algorithms (i.
 
 ## Installation
 
-To run the basic examples you will need ``pyRDDLGym>=2.0``, ``rddlrepository>=2.0`` and one of the supported reinforcement learning frameworks:
+To run the basic examples you will need ``pyRDDLGym>=2.1``, ``rddlrepository>=2.0`` and one of the supported reinforcement learning frameworks:
 - ``stable-baselines3>=2.2.1``
 - ``ray[rllib]>=2.9.2``
 
