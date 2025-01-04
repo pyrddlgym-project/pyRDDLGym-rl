@@ -4,6 +4,7 @@
 [![PyPI Version](https://img.shields.io/pypi/v/pyRDDLGym-rl.svg)](https://pypi.org/project/pyRDDLGym-rl/)
 [![Documentation Status](https://readthedocs.org/projects/pyrddlgym/badge/?version=latest)](https://pyrddlgym.readthedocs.io/en/latest/sb.html)
 ![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)
+![Cumulative PyPI Downloads](https://img.shields.io/pypi/dm/pyrddlgym-rl)
 
 [Installation](#installation) | [Examples](#running-the-basic-examples) | [Creating Environments](#creating-an-environment)
 
