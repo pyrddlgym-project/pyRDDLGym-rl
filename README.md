@@ -1,19 +1,16 @@
 # pyRDDLGym-rl
 
-Author: [Mike Gimelfarb](https://mike-gimelfarb.github.io)
+![Python Version](https://img.shields.io/badge/python-3.8%2B-blue)
+[![PyPI Version](https://img.shields.io/pypi/v/pyRDDLGym-rl.svg)](https://pypi.org/project/pyRDDLGym-rl/)
+[![Documentation Status](https://readthedocs.org/projects/pyrddlgym/badge/?version=latest)](https://pyrddlgym.readthedocs.io/en/latest/sb.html)
+![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)
 
-This repository provides wrappers for deep reinforcement learning algorithms (i.e. Stable Baselines 3 and RLlib) to work with pyRDDLGym.
+[Installation](#installation) | [Examples](#running-the-basic-examples) | [Creating Environments](#creating-an-environment)
+
+Provides wrappers for deep reinforcement learning algorithms (i.e. Stable Baselines 3 and RLlib) to work with pyRDDLGym.
 
 > [!NOTE]  
 > If your environment has differentiable dynamics and a differentiable reward, try the gradient-based [JAX planner](https://github.com/pyrddlgym-project/pyRDDLGym-jax).
-
-## Contents
-
-- [Installation](#installation)
-- [Running the Basic Examples](#running-the-basic-examples)
-  - [Stable Baselines 3](#stable-baselines-3)
-  - [RLlib](#rllib)
-- [Creating an Environment](#creating-an-environment)
 
 ## Installation
 
