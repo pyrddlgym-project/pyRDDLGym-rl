@@ -263,7 +263,7 @@ class SimplifiedActionRDDLEnv(RDDLEnv):
                         prange, RDDLValueInitializer.INT)
                     correct_shape = np.shape(noop_actions[var])
                     actions[var] = np.reshape(
-                        action, newshape=correct_shape, order='C').astype(dtype)
+                        action, correct_shape, order='C').astype(dtype)
         
         # process the active max-nondef-actions constraint
         action_key = gym_actions.get('discrete', None)
@@ -278,7 +278,7 @@ class SimplifiedActionRDDLEnv(RDDLEnv):
                         action = np.full(shape=count, fill_value=default_value, dtype=bool)
                         action[index_in_var] ^= True
                         correct_shape = np.shape(noop_actions[var])
-                        actions[var] = np.reshape(action, newshape=correct_shape, order='C')
+                        actions[var] = np.reshape(action, correct_shape, order='C')
                         break
             
         return actions
