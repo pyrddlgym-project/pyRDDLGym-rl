@@ -1,5 +1,6 @@
 from gymnasium.spaces import Box, Dict, Discrete, MultiDiscrete
 import numpy as np
+import termcolor
 import typing
 import warnings
 
@@ -30,6 +31,7 @@ class SimplifiedActionRDDLEnv(RDDLEnv):
                  action_mode: str='dict',
                  num_bins: int=11,
                  normalize_actions: bool=False,
+                 print_summary: bool=True,
                  **kwargs) -> None:
         '''Creates a new gym environment from the given RDDL domain + instance.
 
@@ -68,6 +70,8 @@ class SimplifiedActionRDDLEnv(RDDLEnv):
         algorithms that clip rather than rescale actions (e.g. PPO, A2C in
         stable baselines), since off-policy stable baselines algorithms and
         RLlib already rescale actions
+        :param print_summary: whether to print a summary of the observation and
+        action spaces when the environment is created
         :param **kwargs: other arguments to pass to RDDLEnv (e.g. preprocessor)
         '''
         if not kwargs.pop('vectorized', True):
@@ -114,6 +118,8 @@ class SimplifiedActionRDDLEnv(RDDLEnv):
 
         # construct the gym action space
         self.action_space = self._rddl_to_gym_bounds_act(self._action_ranges)
+        if print_summary:
+            print(self.summarize_spaces())
 
     def _rddl_to_gym_bounds_act(self, ranges):
 
@@ -305,6 +311,7 @@ class SimplifiedActionRDDLEnv(RDDLEnv):
         # actions are one coordinate per value of which the argmax is selected
         widths = np.where(disc_ordinal, 1, self._disc_nelem)
         offsets = np.cumsum(widths) - widths
+        self._box_widths, self._box_offsets = widths, offsets
         self._box_ordinal = (np.flatnonzero(disc_ordinal), offsets[disc_ordinal])
         self._box_categorical = [
             (i, offsets[i], widths[i]) for i in np.flatnonzero(~disc_ordinal)]
@@ -403,6 +410,196 @@ class SimplifiedActionRDDLEnv(RDDLEnv):
                         break
 
         return actions
+
+    @staticmethod
+    def _format_number(value):
+        if np.issubdtype(np.asarray(value).dtype, np.integer):
+            return str(int(value))
+        return repr(float(value))
+
+    @staticmethod
+    def _format_range(low, high):
+        low, high = np.ravel(low), np.ravel(high)
+        fmt = SimplifiedActionRDDLEnv._format_number
+        if not low.size:
+            return '[]'
+        text = f'[{fmt(np.min(low))}, {fmt(np.max(high))}]'
+        if np.any(low != low[0]) or np.any(high != high[0]):
+            text += ' (varies)'
+        return text
+
+    @staticmethod
+    def _format_array(values, max_items=6):
+        values = [str(value) for value in np.ravel(values)]
+        if len(values) > max_items:
+            values = values[:2] + ['...'] + values[-2:]
+        return f'[{", ".join(values)}]'
+
+    @staticmethod
+    def _format_space(space):
+        fmt = SimplifiedActionRDDLEnv._format_array
+        if isinstance(space, Box):
+            low, high = space.low, space.high
+            if np.all(low == low.flat[0]) and np.all(high == high.flat[0]):
+                bounds = f'{low.flat[0]}, {high.flat[0]}'
+            else:
+                bounds = f'{fmt(low)}, {fmt(high)}'
+            return f'Box({bounds}, {space.shape}, {space.dtype})'
+        elif isinstance(space, Discrete):
+            return f'Discrete({space.n})'
+        elif isinstance(space, MultiDiscrete):
+            return f'MultiDiscrete({fmt(space.nvec)})'
+        elif isinstance(space, Dict):
+            keys = 'key' if len(space) == 1 else 'keys'
+            return f'Dict with {len(space)} {keys}'
+        else:
+            return str(space)
+
+    @staticmethod
+    def _format_rows(rows, indent):
+        if not rows:
+            return ''
+        widths = [max(len(row[i]) for row in rows) for i in range(len(rows[0]) - 1)]
+        result = ''
+        for row in rows:
+            cells = [cell.ljust(width) for (cell, width) in zip(row[:-1], widths)]
+            description = termcolor.colored(row[-1], 'dark_grey')
+            result += ' ' * indent + '  '.join(cells + [description]) + '\n'
+        return result
+
+    def _action_location(self, var):
+        key, (start, count) = self._locational[var]
+        if not count:
+            return key, 0, 0
+
+        # bool actions with constraint share the last discrete action, and in a
+        # box space each of their values is one coordinate of an argmax
+        if self._bool_constraint and self._action_ranges[var] == 'bool':
+            selector = self._disc_nelem.size - 1
+            if self.action_mode == 'box':
+                first = self._box_offsets[selector] + start
+                return key, int(first), int(first + count)
+            return key, selector, selector + 1
+
+        # map to the coordinates of the action space for the current action mode
+        if self.action_mode == 'box':
+            if key == 'discrete':
+                first = self._box_offsets[start]
+                last = self._box_offsets[start + count - 1] + \
+                    self._box_widths[start + count - 1]
+            else:
+                first = self._box_cont_start + start
+                last = first + count
+        elif self.action_mode == 'discrete' and key == 'continuous':
+            first = self._disc_nelem.size + start
+            last = first + count
+        else:
+            first, last = start, start + count
+        return key, int(first), int(last)
+
+    def _action_description(self, var, prange):
+        _, (start, count) = self._locational[var]
+        box = self.action_mode == 'box'
+        if prange == 'bool' and self._bool_constraint:
+            none = self._disc_nelem[-1] - 1
+            if box:
+                offset = self._box_offsets[-1]
+                description = (f'bool, argmax of [{offset}:{offset + none + 1}], '
+                               f'[{offset + none}] is none')
+            else:
+                values = f'{start}' if count == 1 else f'{start}-{start + count - 1}'
+                description = f'bool, values {values} of {none + 1}, {none} is none'
+            description += ' (max-nondef-actions=1)'
+        elif prange == 'bool':
+            description = 'bool'
+            if box:
+                description += ', true if > 0'
+        elif prange == 'int':
+            low = self._disc_start[start:start + count]
+            high = low + self._disc_nelem[start:start + count] - 1
+            description = f'int in {self._format_range(low, high)}'
+            if box:
+                description += ', equal intervals'
+        elif prange in self.model.enum_types:
+            objects = self.model.type_to_objects[prange]
+            if len(objects) > 6:
+                objects = objects[:3] + ['...'] + objects[-2:]
+            description = f'{prange} in {{{", ".join(objects)}}}'
+            if box:
+                description += ', argmax'
+        else:
+            description = 'real in ' + self._format_range(
+                self._cont_low[start:start + count], self._cont_high[start:start + count])
+            if self.action_mode == 'discrete':
+                description += f', {self.num_bins} bins'
+            elif self.normalize_actions:
+                description += ', rescaled from [-1, 1]'
+        return f'[{description}]'
+
+    def _action_rows(self, key, space):
+        rows = []
+        for (var, prange) in self._action_ranges.items():
+            var_key, first, last = self._action_location(var)
+            if key is not None and var_key != key:
+                continue
+            if isinstance(space, Discrete) or last <= first:
+                index = '-'
+            elif last - first == 1:
+                index = f'[{first}]'
+            else:
+                index = f'[{first}:{last}]'
+            params = self.model.variable_params[var]
+            label = f'{var}({", ".join(params)})' if params else var
+            rows.append((first, (label, index, self._action_description(var, prange))))
+        return [row for (_, row) in sorted(rows, key=lambda row: row[0])]
+
+    def summarize_spaces(self) -> str:
+        '''Returns a summary of the environment settings and the observation and
+        action spaces, showing how each RDDL fluent maps to each space.
+        '''
+        max_nondef = self.max_allowed_actions
+        if not np.isfinite(max_nondef):
+            max_nondef = 'pos-inf'
+        result = (f'[INFO] environment settings:\n'
+                  f'    domain                       ={self.model.domain_name}\n'
+                  f'    instance                     ={self.model.instance_name}\n'
+                  f'    horizon                      ={self.horizon}\n'
+                  f'    discount                     ={self.discount}\n'
+                  f'    max_nondef_actions           ={max_nondef}\n'
+                  f'    action_mode                  ={self.action_mode}\n')
+        if self.action_mode == 'discrete':
+            result += f'    num_bins                     ={self.num_bins}\n'
+        else:
+            result += f'    normalize_actions            ={self.normalize_actions}\n'
+        result += (f'    enforce_action_constraints   ={self.enforce_action_constraints}\n'
+                   f'    enforce_action_count_non_bool={self.enforce_count_non_bool}\n')
+
+        # observation space: one entry per state or observ-fluent
+        fluent_type = 'observ-fluents' if self.sampler.is_pomdp else 'state-fluents'
+        if self.sampler.is_pomdp:
+            ranges = self.model.observ_ranges
+        else:
+            ranges = self.model.state_ranges
+        rows = []
+        for (var, space) in self.observation_space.items():
+            params = self.model.variable_params[var]
+            description = f'[{ranges[var]}, over ({", ".join(params)})]' \
+                if params else f'[{ranges[var]}]'
+            rows.append((f'{var}:', self._format_space(space), description))
+        result += (f'[INFO] observation space ({fluent_type}):\n'
+                   f'    {self._format_space(self.observation_space)}\n')
+        result += self._format_rows(rows, indent=8)
+
+        # action space: one entry per action-fluent, nested in Dict sub-spaces
+        result += (f'[INFO] action space (action_mode={self.action_mode}):\n'
+                   f'    {self._format_space(self.action_space)}\n')
+        if isinstance(self.action_space, Dict):
+            for (key, space) in self.action_space.items():
+                result += f'        {key}: {self._format_space(space)}\n'
+                result += self._format_rows(self._action_rows(key, space), indent=12)
+        else:
+            result += self._format_rows(self._action_rows(None, self.action_space), indent=8)
+        return result
 
     def _gym_observation(self, obs):
         '''Casts observations to the dtypes of the observation space, and

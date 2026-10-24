@@ -29,7 +29,8 @@ setup(
       url="https://github.com/pyrddlgym-project/pyRDDLGym-rl",
       packages=find_packages(),
       install_requires=[
-          'pyRDDLGym>=2.1'
+          'pyRDDLGym>=2.1',
+          'rich>=15.0.0'
         ],
       python_requires=">=3.8",
       package_data={'': ['*.cfg']},

@@ -17,6 +17,7 @@ from stable_baselines3 import *
 import pyRDDLGym
 
 from pyRDDLGym_rl.core.agent import StableBaselinesAgent
+from pyRDDLGym_rl.core.callbacks import TrainingProgressCallback
 from pyRDDLGym_rl.core.env import SimplifiedActionRDDLEnv
 
 METHODS = {'a2c': A2C, 'ddpg': DDPG, 'dqn': DQN, 'ppo': PPO, 'sac': SAC, 
@@ -30,11 +31,11 @@ def main(domain, instance, method, steps=200000, learning_rate=None):
                          enforce_action_constraints=True)
     
     # train the PPO agent
-    kwargs = {'verbose': 1}
+    kwargs = {'verbose': 0}
     if learning_rate is not None:
         kwargs['learning_rate'] = learning_rate
-    model = METHODS[method]('MultiInputPolicy', env, **kwargs)    
-    model.learn(total_timesteps=steps)
+    model = METHODS[method]('MultiInputPolicy', env, **kwargs)
+    model.learn(total_timesteps=steps, callback=TrainingProgressCallback())
     
     # wrap the agent in a RDDL policy and evaluate
     ppo_agent = StableBaselinesAgent(model)
