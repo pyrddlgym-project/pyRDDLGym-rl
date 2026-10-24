@@ -17,6 +17,8 @@ class SimplifiedActionRDDLEnv(RDDLEnv):
     '''A gym environment class for RDDL domains, modified to compact the
     action space to avoid the use of Dict space.'''
 
+    ACTION_MODES = ('dict', 'box', 'discrete')
+
     def __init__(self, domain: str,
                  instance: str,
                  enforce_action_constraints: bool=False,
@@ -25,6 +27,9 @@ class SimplifiedActionRDDLEnv(RDDLEnv):
                  log_path: str=None,
                  backend: typing.Type=RDDLSimulator,
                  backend_kwargs: typing.Optional[typing.Dict]=None,
+                 action_mode: str='dict',
+                 num_bins: int=11,
+                 normalize_actions: bool=False,
                  **kwargs) -> None:
         '''Creates a new gym environment from the given RDDL domain + instance.
 
@@ -44,11 +49,39 @@ class SimplifiedActionRDDLEnv(RDDLEnv):
         simulation (currently supports numpy and Jax)
         :param backend_kwargs: dictionary of additional named arguments to
         pass to backend (must not include logger)
+        :param action_mode: how actions are represented, one of:
+        'dict': bool, int and enum actions are a Discrete or MultiDiscrete space
+        and real actions are a Box space, combined in a Dict space only if both
+        are present (supported by e.g. RLlib);
+        'box': all actions are a single Box space, where each int or bool action
+        is one coordinate in [-1, 1] split into equal intervals (one per value),
+        each enum action (and the choice of bool action if max-nondef-actions
+        is 1) is one coordinate in [-1, 1] per value of which the argmax is
+        selected, and real actions keep their bounds (supported by e.g. PPO, SAC, TD3);
+        'discrete': all actions are a single Discrete or MultiDiscrete space,
+        where each real action is discretized into num_bins evenly spaced values
+        between its bounds (supported by e.g. PPO, A2C)
+        :param num_bins: number of values of each real action if action_mode is 'discrete'
+        :param normalize_actions: whether real actions are represented in [-1, 1]
+        and rescaled to their bounds, which requires all bounds to be finite,
+        and has no effect if action_mode is 'discrete': this is only useful for
+        algorithms that clip rather than rescale actions (e.g. PPO, A2C in
+        stable baselines), since off-policy stable baselines algorithms and
+        RLlib already rescale actions
         :param **kwargs: other arguments to pass to RDDLEnv (e.g. preprocessor)
         '''
         if not kwargs.pop('vectorized', True):
             raise ValueError(
                 'SimplifiedActionRDDLEnv only supports vectorized=True.')
+        if action_mode not in self.ACTION_MODES:
+            raise ValueError(
+                f'Action mode <{action_mode}> is not valid, '
+                f'must be one of {self.ACTION_MODES}.')
+        if action_mode == 'discrete' and num_bins < 2:
+            raise ValueError(f'num_bins must be at least 2, got {num_bins}.')
+        self.action_mode = action_mode
+        self.num_bins = num_bins
+        self.normalize_actions = normalize_actions
 
         # objects must be returned as integer indices to be valid observations
         backend_kwargs = dict(backend_kwargs or {})
@@ -80,8 +113,7 @@ class SimplifiedActionRDDLEnv(RDDLEnv):
         self.observation_space = self._rddl_to_gym_bounds(state_ranges)
 
         # construct the gym action space
-        self.action_space, self._action_info = \
-            self._rddl_to_gym_bounds_act(self._action_ranges)
+        self.action_space = self._rddl_to_gym_bounds_act(self._action_ranges)
 
     def _rddl_to_gym_bounds_act(self, ranges):
 
@@ -114,7 +146,7 @@ class SimplifiedActionRDDLEnv(RDDLEnv):
         # collect information about action ranges
         locational = {}
         count_disc, count_cont, count_bool = 0, 0, 0
-        disc_start, disc_nelem = [], []
+        disc_start, disc_nelem, disc_ordinal = [], [], []
         cont_low, cont_high = [], []
         for (var, prange) in ranges.items():
             num_elements = np.prod(self._shapes[var], dtype=np.int64)
@@ -127,6 +159,7 @@ class SimplifiedActionRDDLEnv(RDDLEnv):
                 else:
                     disc_start.extend([0] * num_elements)
                     disc_nelem.extend([2] * num_elements)
+                    disc_ordinal.extend([True] * num_elements)
                     locational[var] = ('discrete', (count_disc, num_elements))
                     count_disc += num_elements
 
@@ -148,6 +181,7 @@ class SimplifiedActionRDDLEnv(RDDLEnv):
                         f'got bounds [{low}, {high}].')
                 disc_start.extend(low.tolist())
                 disc_nelem.extend((high - low + 1).tolist())
+                disc_ordinal.extend([True] * num_elements)
                 locational[var] = ('discrete', (count_disc, num_elements))
                 count_disc += num_elements
 
@@ -156,6 +190,7 @@ class SimplifiedActionRDDLEnv(RDDLEnv):
                 num_objects = len(self.model.type_to_objects[prange])
                 disc_start.extend([0] * num_elements)
                 disc_nelem.extend([num_objects] * num_elements)
+                disc_ordinal.extend([False] * num_elements)
                 locational[var] = ('discrete', (count_disc, num_elements))
                 count_disc += num_elements
 
@@ -179,35 +214,34 @@ class SimplifiedActionRDDLEnv(RDDLEnv):
         if bool_constraint:
             disc_start.append(0)
             disc_nelem.append(count_bool + 1)
+            disc_ordinal.append(False)
             count_disc += 1
-
-        # discrete space
-        if len(disc_nelem) == 1:
-            disc_space = Discrete(disc_nelem[0])
-        elif len(disc_nelem) > 1:
-            disc_space = MultiDiscrete(disc_nelem)
-        else:
-            disc_space = None
-
-        # real space
-        if count_cont:
-            cont_space = Box(np.asarray(cont_low), np.asarray(cont_high),
-                             dtype=np.float32)
-        else:
-            cont_space = None
-
-        # simplify space
-        combined_space = Dict()
-        if disc_space is not None:
-            combined_space['discrete'] = disc_space
-        if cont_space is not None:
-            combined_space['continuous'] = cont_space
-        if not combined_space:
+        if not count_disc and not count_cont:
             raise RDDLInvalidActionError(
                 'RDDL action specification resulted in an empty action space.')
-        keys = list(combined_space.keys())
-        if len(keys) == 1:
-            combined_space = combined_space[keys[0]]
+
+        # continuous bounds are kept in float64 to clip actions exactly
+        self._locational = locational
+        self._bool_constraint = bool_constraint
+        self._disc_start = np.asarray(disc_start, dtype=np.int64)
+        self._disc_nelem = np.asarray(disc_nelem, dtype=np.int64)
+        self._cont_low = np.asarray(cont_low, dtype=np.float64)
+        self._cont_high = np.asarray(cont_high, dtype=np.float64)
+        if self.normalize_actions and self.action_mode != 'discrete':
+            unbounded = self._unbounded_real_actions()
+            if unbounded:
+                raise RDDLNotImplementedError(
+                    f'Real action-fluents {unbounded} must have finite lower and '
+                    f'upper bounds specified in action-preconditions for '
+                    f'normalize_actions=True.')
+
+        # build the space for the requested action mode
+        if self.action_mode == 'box':
+            space = self._box_action_space(np.asarray(disc_ordinal, dtype=bool))
+        elif self.action_mode == 'discrete':
+            space = self._discrete_action_space()
+        else:
+            space = self._dict_action_space()
 
         # log information
         if self.logger is not None:
@@ -222,50 +256,143 @@ class SimplifiedActionRDDLEnv(RDDLEnv):
             self.logger.log(f'[info] computed gym action space:\n'
                             f'{bound_info}\n'
                             f'\t{act_info}\n'
-                            f'[info] final space: {combined_space}\n')
+                            f'[info] final space ({self.action_mode}): {space}\n')
+        return space
 
-        # continuous bounds are kept in float64 to clip actions exactly
-        return combined_space, \
-            (locational, keys, bool_constraint, np.asarray(disc_start, dtype=np.int64),
-             np.asarray(cont_low, dtype=np.float64),
-             np.asarray(cont_high, dtype=np.float64))
+    @staticmethod
+    def _discrete_space(nelem):
+        if len(nelem) == 1:
+            return Discrete(int(nelem[0]))
+        else:
+            return MultiDiscrete(nelem)
+
+    def _cont_space(self, low, high):
+        return Box(np.asarray(low, dtype=np.float32),
+                   np.asarray(high, dtype=np.float32), dtype=np.float32)
+
+    def _unbounded_real_actions(self):
+        return [var for (var, (key, (start, count))) in self._locational.items()
+                if key == 'continuous' and not (
+                    np.all(np.isfinite(self._cont_low[start:start + count])) and
+                    np.all(np.isfinite(self._cont_high[start:start + count])))]
+
+    def _agent_cont_bounds(self):
+        if self.normalize_actions:
+            return -np.ones(self._cont_low.size), np.ones(self._cont_high.size)
+        else:
+            return self._cont_low, self._cont_high
+
+    def _denormalize_cont_action(self, cont):
+        if not self.normalize_actions or cont is None:
+            return cont
+        fraction = (np.clip(np.atleast_1d(cont), -1., 1.) + 1.) / 2.
+        return self._cont_low + fraction * (self._cont_high - self._cont_low)
+
+    def _dict_action_space(self):
+        space = Dict()
+        if self._disc_nelem.size:
+            space['discrete'] = self._discrete_space(self._disc_nelem)
+        if self._cont_low.size:
+            space['continuous'] = self._cont_space(*self._agent_cont_bounds())
+        self._action_keys = list(space.keys())
+        if len(self._action_keys) == 1:
+            space = space[self._action_keys[0]]
+        return space
+
+    def _box_action_space(self, disc_ordinal):
+
+        # ordinal actions are one coordinate split into equal intervals, categorical
+        # actions are one coordinate per value of which the argmax is selected
+        widths = np.where(disc_ordinal, 1, self._disc_nelem)
+        offsets = np.cumsum(widths) - widths
+        self._box_ordinal = (np.flatnonzero(disc_ordinal), offsets[disc_ordinal])
+        self._box_categorical = [
+            (i, offsets[i], widths[i]) for i in np.flatnonzero(~disc_ordinal)]
+        self._box_cont_start = int(np.sum(widths))
+
+        cont_low, cont_high = self._agent_cont_bounds()
+        low = np.concatenate([-np.ones(self._box_cont_start), cont_low])
+        high = np.concatenate([np.ones(self._box_cont_start), cont_high])
+        return self._cont_space(low, high)
+
+    def _discrete_action_space(self):
+        unbounded = self._unbounded_real_actions()
+        if unbounded:
+            raise RDDLNotImplementedError(
+                f'Real action-fluents {unbounded} must have finite lower and upper '
+                f'bounds specified in action-preconditions for action_mode=discrete.')
+        bins = np.full(self._cont_low.size, self.num_bins, dtype=np.int64)
+        return self._discrete_space(np.concatenate([self._disc_nelem, bins]))
+
+    def _decode_box_action(self, action):
+        action = np.ravel(np.asarray(action, dtype=np.float64))
+        disc = np.zeros(self._disc_nelem.size, dtype=np.int64)
+        index, offset = self._box_ordinal
+        nelem = self._disc_nelem[index]
+        fraction = (np.clip(action[offset], -1., 1.) + 1.) / 2.
+        disc[index] = np.minimum(np.floor(fraction * nelem), nelem - 1)
+        for (i, start, width) in self._box_categorical:
+            disc[i] = np.argmax(action[start:start + width])
+        return disc, self._denormalize_cont_action(action[self._box_cont_start:])
+
+    def _decode_discrete_action(self, action):
+        action = np.atleast_1d(action).astype(np.int64)
+        num_disc = self._disc_nelem.size
+        fraction = action[num_disc:] / (self.num_bins - 1)
+        cont = self._cont_low + fraction * (self._cont_high - self._cont_low)
+        return action[:num_disc], cont
+
+    def _decode_dict_action(self, action):
+        if not isinstance(action, dict):
+            action = {self._action_keys[0]: action}
+        cont = self._denormalize_cont_action(action.get('continuous', None))
+        return action.get('discrete', None), cont
 
     def _gym_to_rddl_actions(self, gym_actions):
-        locational, keys, bool_constraint, disc_start, cont_low, cont_high = \
-            self._action_info
-        if len(keys) == 1 and not (
-            isinstance(gym_actions, dict) and keys[0] in gym_actions):
-            if isinstance(gym_actions, dict):
-                gym_actions = gym_actions['action']
-            gym_actions = {keys[0]: gym_actions}
+
+        # actions of non-Dict spaces can also be passed as {'action': action}
+        if isinstance(gym_actions, dict) and 'action' in gym_actions \
+        and not isinstance(self.action_space, Dict):
+            gym_actions = gym_actions['action']
+
+        # decode into discrete indices and continuous values
+        if self.action_mode == 'box':
+            disc, cont = self._decode_box_action(gym_actions)
+        elif self.action_mode == 'discrete':
+            disc, cont = self._decode_discrete_action(gym_actions)
+        else:
+            disc, cont = self._decode_dict_action(gym_actions)
         noop_actions = self.sampler.noop_actions
 
         # process all actions except if active max-nondef-actions constraint
         actions = {}
         for (var, prange) in self._action_ranges.items():
-            if not (bool_constraint and prange == 'bool'):
-                key, (start, count) = locational[var]
-                action_key = gym_actions.get(key, None)
-                if action_key is not None:
-                    action = np.atleast_1d(action_key)[start:start + count]
-                    if key == 'discrete':
-                        action = action + disc_start[start:start + count]
-                    else:
-                        action = np.clip(action, cont_low[start:start + count],
-                                         cont_high[start:start + count])
-                    dtype = RDDLValueInitializer.NUMPY_TYPES.get(
-                        prange, RDDLValueInitializer.INT)
-                    correct_shape = np.shape(noop_actions[var])
-                    actions[var] = np.reshape(
-                        action, correct_shape, order='C').astype(dtype)
+            if self._bool_constraint and prange == 'bool':
+                continue
+            key, (start, count) = self._locational[var]
+            if key == 'discrete':
+                if disc is None:
+                    continue
+                action = np.atleast_1d(disc)[start:start + count]
+                action = action + self._disc_start[start:start + count]
+            else:
+                if cont is None:
+                    continue
+                action = np.atleast_1d(cont)[start:start + count]
+                action = np.clip(action, self._cont_low[start:start + count],
+                                 self._cont_high[start:start + count])
+            dtype = RDDLValueInitializer.NUMPY_TYPES.get(
+                prange, RDDLValueInitializer.INT)
+            correct_shape = np.shape(noop_actions[var])
+            actions[var] = np.reshape(
+                action, correct_shape, order='C').astype(dtype)
 
         # process the active max-nondef-actions constraint
-        action_key = gym_actions.get('discrete', None)
-        if bool_constraint and action_key is not None:
-            index = np.atleast_1d(action_key)[-1]
+        if self._bool_constraint and disc is not None:
+            index = np.atleast_1d(disc)[-1]
             for (var, prange) in self._action_ranges.items():
                 if prange == 'bool':
-                    _, (start, count) = locational[var]
+                    _, (start, count) = self._locational[var]
                     index_in_var = index - start
                     if 0 <= index_in_var < count:
                         default_value = self.model.variable_defaults[var]
@@ -296,9 +423,6 @@ class SimplifiedActionRDDLEnv(RDDLEnv):
         return result
 
     def reset(self, seed=None, options=None):
-        if seed is not None:
-            self.action_space.seed(seed)
-            self.observation_space.seed(seed)
         obs, info = super(SimplifiedActionRDDLEnv, self).reset(seed=seed, options=options)
         return self._gym_observation(obs), info
 
