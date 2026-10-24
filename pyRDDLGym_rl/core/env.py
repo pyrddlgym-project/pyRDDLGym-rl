@@ -114,7 +114,7 @@ class SimplifiedActionRDDLEnv(RDDLEnv):
             state_ranges = self.model.observ_ranges
         else:
             state_ranges = self.model.state_ranges
-        self.observation_space = self._rddl_to_gym_bounds(state_ranges)
+        self.observation_space = Dict(dict(self._rddl_to_gym_bounds(state_ranges)))
 
         # construct the gym action space
         self.action_space = self._rddl_to_gym_bounds_act(self._action_ranges)
@@ -295,11 +295,12 @@ class SimplifiedActionRDDLEnv(RDDLEnv):
         return self._cont_low + fraction * (self._cont_high - self._cont_low)
 
     def _dict_action_space(self):
-        space = Dict()
+        spaces = {}
         if self._disc_nelem.size:
-            space['discrete'] = self._discrete_space(self._disc_nelem)
+            spaces['discrete'] = self._discrete_space(self._disc_nelem)
         if self._cont_low.size:
-            space['continuous'] = self._cont_space(*self._agent_cont_bounds())
+            spaces['continuous'] = self._cont_space(*self._agent_cont_bounds())
+        space = Dict(spaces)
         self._action_keys = list(space.keys())
         if len(self._action_keys) == 1:
             space = space[self._action_keys[0]]
