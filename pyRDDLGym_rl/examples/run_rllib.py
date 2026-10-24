@@ -24,33 +24,45 @@ from pyRDDLGym_rl.core.env import SimplifiedActionRDDLEnv
 METHODS = {'dqn': DQNConfig, 'ppo': PPOConfig, 'sac': SACConfig}
 
 
+def episode_return(result, stat):
+    '''Returns a statistic of the episode returns from the result of a training
+    iteration, whose name and location depend on the version of rllib.'''
+    stats = result.get('env_runners', result)
+    return stats.get(f'episode_return_{stat}', stats.get(f'episode_reward_{stat}'))
+
+
 def main(domain, instance, method, iters=20):
-    
+
     # set up the environment
     def env_creator(env_config):
         return pyRDDLGym.make(env_config['domain'], env_config['instance'],
-                              base_class=SimplifiedActionRDDLEnv)    
+                              base_class=SimplifiedActionRDDLEnv, print_summary=False)
 
     register_env('RLLibEnv', env_creator)
-    
+
     # create agent
     env_config = {'domain': domain, 'instance': instance}
     config = METHODS[method]()
-    config = config.rollouts(num_rollout_workers=1)
     config = config.environment('RLLibEnv', env_config=env_config)
-    algo = config.build()
-    
+
+    # the new API stack (default in recent rllib) must flatten Dict observations
+    if getattr(config, 'enable_env_runner_and_connector_v2', False):
+        from ray.rllib.connectors.env_to_module import FlattenObservations
+        config = config.env_runners(
+            env_to_module_connector=lambda *_args, **_kwargs: FlattenObservations())
+    algo = getattr(config, 'build_algo', config.build)()
+
     # train agent
     for n in range(iters):
         result = algo.train()
         print(f'iteration {n + 1} '
-              f'/ min {result["episode_reward_min"]} '
-              f'/ mean {result["episode_reward_mean"]} '
-              f'/ max {result["episode_reward_max"]}')
-    
+              f'/ min {episode_return(result, "min")} '
+              f'/ mean {episode_return(result, "mean")} '
+              f'/ max {episode_return(result, "max")}')
+
     # wrap the agent in a RDDL policy and evaluate
-    RLLibAgent(algo).evaluate(env_creator(env_config),
-                              episodes=1, verbose=True, render=True)
+    env = pyRDDLGym.make(domain, instance, base_class=SimplifiedActionRDDLEnv)
+    RLLibAgent(algo).evaluate(env, episodes=1, verbose=True, render=True)
             
         
 if __name__ == "__main__":
