@@ -51,14 +51,18 @@ class SimplifiedActionRDDLEnv(RDDLEnv):
         simulation (currently supports numpy and Jax)
         :param backend_kwargs: dictionary of additional named arguments to
         pass to backend (must not include logger)
-        :param action_mode: how actions are represented, one of:
+        :param action_mode: how actions are represented, one of the following,
+        where if max-nondef-actions is less than the number of bool actions, the
+        bool actions are replaced by max-nondef-actions selectors, each choosing
+        one bool action to set or none, so that exactly the valid combinations
+        of bool actions can be chosen:
         'dict': bool, int and enum actions are a Discrete or MultiDiscrete space
         and real actions are a Box space, combined in a Dict space only if both
         are present (supported by e.g. RLlib);
         'box': all actions are a single Box space, where each int or bool action
         is one coordinate in [-1, 1] split into equal intervals (one per value),
-        each enum action (and the choice of bool action if max-nondef-actions
-        is 1) is one coordinate in [-1, 1] per value of which the argmax is
+        each enum action (and each bool action selector) is one coordinate
+        in [-1, 1] per value of which the argmax is
         selected, and real actions keep their bounds (supported by e.g. PPO, SAC, TD3);
         'discrete': all actions are a single Discrete or MultiDiscrete space,
         where each real action is discretized into num_bins evenly spaced values
@@ -130,17 +134,14 @@ class SimplifiedActionRDDLEnv(RDDLEnv):
                 total_bool += np.prod(self._shapes[var], dtype=np.int64)
             else:
                 total_non_bool += np.prod(self._shapes[var], dtype=np.int64)
-        if self.max_allowed_actions < total_bool:
-            if self.max_allowed_actions != 1:
-                raise RDDLNotImplementedError(
-                    'Simplification of bool action space with max-nondef-actions '
-                    'other than 1 or pos-inf is not currently supported.')
-            bool_constraint = True
-        else:
-            bool_constraint = False
+                
+        # if max-nondef-actions constrains the bool actions, each selector chooses
+        # one bool action to set or none, which allows exactly the valid choices
+        bool_constraint = self.max_allowed_actions < total_bool
+        bool_selectors = int(self.max_allowed_actions) if bool_constraint else 0
 
         # max-nondef-actions is only enforced on bool actions by the action space
-        max_non_default = (1 if bool_constraint else total_bool) + total_non_bool
+        max_non_default = (bool_selectors if bool_constraint else total_bool) + total_non_bool
         if not self.enforce_count_non_bool and total_non_bool \
         and max_non_default > self.max_allowed_actions:
             warnings.warn(
@@ -216,12 +217,12 @@ class SimplifiedActionRDDLEnv(RDDLEnv):
                     f'Type <{prange}> of fluent <{var}> is not valid, '
                     f'must be an enumerated or primitive type (real, int, bool).')
 
-        # boolean actions with constraint are stored in the last place instead
+        # boolean actions with constraint are stored as selectors in the last place
         if bool_constraint:
-            disc_start.append(0)
-            disc_nelem.append(count_bool + 1)
-            disc_ordinal.append(False)
-            count_disc += 1
+            disc_start.extend([0] * bool_selectors)
+            disc_nelem.extend([count_bool + 1] * bool_selectors)
+            disc_ordinal.extend([False] * bool_selectors)
+            count_disc += bool_selectors
         if not count_disc and not count_cont:
             raise RDDLInvalidActionError(
                 'RDDL action specification resulted in an empty action space.')
@@ -229,6 +230,7 @@ class SimplifiedActionRDDLEnv(RDDLEnv):
         # continuous bounds are kept in float64 to clip actions exactly
         self._locational = locational
         self._bool_constraint = bool_constraint
+        self._bool_selectors = bool_selectors
         self._disc_start = np.asarray(disc_start, dtype=np.int64)
         self._disc_nelem = np.asarray(disc_nelem, dtype=np.int64)
         self._cont_low = np.asarray(cont_low, dtype=np.float64)
@@ -395,20 +397,20 @@ class SimplifiedActionRDDLEnv(RDDLEnv):
             actions[var] = np.reshape(
                 action, correct_shape, order='C').astype(dtype)
 
-        # process the active max-nondef-actions constraint
-        if self._bool_constraint and disc is not None:
-            index = np.atleast_1d(disc)[-1]
+        # process the active max-nondef-actions constraint: set the bool actions
+        # chosen by any selector, where choosing the same action twice sets it once
+        if self._bool_constraint and self._bool_selectors and disc is not None:
+            indices = np.atleast_1d(disc)[-self._bool_selectors:]
             for (var, prange) in self._action_ranges.items():
                 if prange == 'bool':
                     _, (start, count) = self._locational[var]
-                    index_in_var = index - start
-                    if 0 <= index_in_var < count:
+                    chosen = indices[(indices >= start) & (indices < start + count)]
+                    if chosen.size:
                         default_value = self.model.variable_defaults[var]
                         action = np.full(shape=count, fill_value=default_value, dtype=bool)
-                        action[index_in_var] ^= True
+                        action[chosen - start] = not default_value
                         correct_shape = np.shape(noop_actions[var])
                         actions[var] = np.reshape(action, correct_shape, order='C')
-                        break
 
         return actions
 
@@ -473,14 +475,15 @@ class SimplifiedActionRDDLEnv(RDDLEnv):
         if not count:
             return key, 0, 0
 
-        # bool actions with constraint share the last discrete action, and in a
-        # box space each of their values is one coordinate of an argmax
+        # bool actions with constraint share the last discrete actions (selectors),
+        # and in a box space each selector is a group of coordinates of an argmax
         if self._bool_constraint and self._action_ranges[var] == 'bool':
-            selector = self._disc_nelem.size - 1
+            first = self._disc_nelem.size - self._bool_selectors
+            last = self._disc_nelem.size
             if self.action_mode == 'box':
-                first = self._box_offsets[selector] + start
-                return key, int(first), int(first + count)
-            return key, selector, selector + 1
+                first = self._box_offsets[first]
+                last = self._box_cont_start
+            return key, int(first), int(last)
 
         # map to the coordinates of the action space for the current action mode
         if self.action_mode == 'box':
@@ -503,14 +506,13 @@ class SimplifiedActionRDDLEnv(RDDLEnv):
         box = self.action_mode == 'box'
         if prange == 'bool' and self._bool_constraint:
             none = self._disc_nelem[-1] - 1
+            values = f'{start}' if count == 1 else f'{start}-{start + count - 1}'
             if box:
-                offset = self._box_offsets[-1]
-                description = (f'bool, argmax of [{offset}:{offset + none + 1}], '
-                               f'[{offset + none}] is none')
+                description = (f'bool, values {values} of argmax over each '
+                               f'{none + 1} coordinates, {none} is none')
             else:
-                values = f'{start}' if count == 1 else f'{start}-{start + count - 1}'
                 description = f'bool, values {values} of {none + 1}, {none} is none'
-            description += ' (max-nondef-actions=1)'
+            description += f' (max-nondef-actions={self._bool_selectors})'
         elif prange == 'bool':
             description = 'bool'
             if box:
