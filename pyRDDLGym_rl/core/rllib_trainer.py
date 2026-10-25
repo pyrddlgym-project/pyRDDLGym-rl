@@ -80,7 +80,8 @@ class RLLibTrainer:
         :param method: the algorithm to train, either a name in METHODS (e.g. 'ppo',
         case insensitive), a rllib algorithm or algorithm config class, or a
         config instance on which other settings (e.g. resources or env runners)
-        have already been set
+        have already been set; if the config already has an env_to_module_connector,
+        it must flatten the Dict observations
         :param env_kwargs: other arguments passed to pyRDDLGym.make() to create
         each SimplifiedActionRDDLEnv, e.g. the action_mode; the environment
         created by the trainer for evaluation (env) also prints its summary,
@@ -109,8 +110,10 @@ class RLLibTrainer:
         env_config = {'domain': domain, 'instance': instance, **env_kwargs}
         config = config.environment(ENV_NAME, env_config=env_config)
 
-        # the new API stack (default in recent rllib) must flatten Dict observations
-        if getattr(config, 'enable_env_runner_and_connector_v2', False):
+        # the new API stack (default in recent rllib) must flatten Dict observations,
+        # unless a connector was already set
+        if getattr(config, 'enable_env_runner_and_connector_v2', False) \
+        and getattr(config, '_env_to_module_connector', None) is None:
             from ray.rllib.connectors.env_to_module import FlattenObservations
             config = config.env_runners(
                 env_to_module_connector=lambda *_args, **_kwargs: FlattenObservations())

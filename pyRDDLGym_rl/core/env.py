@@ -120,6 +120,15 @@ class SimplifiedActionRDDLEnv(RDDLEnv):
             state_ranges = self.model.state_ranges
         self.observation_space = Dict(dict(self._rddl_to_gym_bounds(state_ranges)))
 
+        # observations outside the range of the dtype are saturated instead of overflow
+        self._obs_limits = {}
+        for (var, space) in self.observation_space.items():
+            if np.issubdtype(space.dtype, np.integer):
+                limits = np.iinfo(space.dtype)
+            else:
+                limits = np.finfo(space.dtype)
+            self._obs_limits[var] = (limits.min, limits.max)
+
         # construct the gym action space
         self.action_space = self._rddl_to_gym_bounds_act(self._action_ranges)
         if print_summary:
@@ -478,6 +487,8 @@ class SimplifiedActionRDDLEnv(RDDLEnv):
         # bool actions with constraint share the last discrete actions (selectors),
         # and in a box space each selector is a group of coordinates of an argmax
         if self._bool_constraint and self._action_ranges[var] == 'bool':
+            if not self._bool_selectors:
+                return key, 0, 0
             first = self._disc_nelem.size - self._bool_selectors
             last = self._disc_nelem.size
             if self.action_mode == 'box':
@@ -504,7 +515,9 @@ class SimplifiedActionRDDLEnv(RDDLEnv):
     def _action_description(self, var, prange):
         _, (start, count) = self._locational[var]
         box = self.action_mode == 'box'
-        if prange == 'bool' and self._bool_constraint:
+        if prange == 'bool' and self._bool_constraint and not self._bool_selectors:
+            description = 'bool, always default (max-nondef-actions=0)'
+        elif prange == 'bool' and self._bool_constraint:
             none = self._disc_nelem[-1] - 1
             values = f'{start}' if count == 1 else f'{start}-{start + count - 1}'
             if box:
@@ -612,13 +625,7 @@ class SimplifiedActionRDDLEnv(RDDLEnv):
             value = obs.get(var, None)
             if value is None or np.asarray(value).dtype == object:
                 value = self.sampler.subs[var]
-
-            # saturate values outside the range of the dtype instead of overflow
-            if np.issubdtype(space.dtype, np.integer):
-                limits = np.iinfo(space.dtype)
-            else:
-                limits = np.finfo(space.dtype)
-            value = np.clip(value, limits.min, limits.max)
+            value = np.clip(value, *self._obs_limits[var])
             result[var] = np.reshape(value, space.shape).astype(space.dtype)
         return result
 

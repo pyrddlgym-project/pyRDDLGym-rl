@@ -30,7 +30,11 @@ class _SpeedColumn(ProgressColumn):
         self.unit = unit
 
     def render(self, task):
+
+        # rich needs two updates to estimate the speed, else use the average speed
         speed = task.finished_speed or task.speed
+        if not speed and task.completed and task.elapsed:
+            speed = task.completed / task.elapsed
         if not speed:
             text = f'- {self.unit}s/s'
         elif speed >= 1:
@@ -60,6 +64,10 @@ class TrainingProgress:
         self.columns = columns
         self.refresh_per_second = refresh_per_second
         self.metrics = {}
+
+        # rich estimates speed only from updates within the period (30s by default),
+        # which may contain fewer than two updates if each takes long (e.g. in rllib),
+        # so use all recent updates instead (of which rich keeps the last 1000)
         self._progress = Progress(
             TextColumn('[bold]{task.description}'),
             BarColumn(),
@@ -68,7 +76,8 @@ class TrainingProgress:
             _SpeedColumn(unit),
             TimeElapsedColumn(),
             TextColumn('<'),
-            TimeRemainingColumn())
+            TimeRemainingColumn(),
+            speed_estimate_period=float('inf'))
         self._task = self._progress.add_task(description, total=total)
         self._live = None
 

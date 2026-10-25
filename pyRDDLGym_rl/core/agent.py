@@ -38,16 +38,30 @@ class RLLibAgent(BaseAgent):
         return actions
 
     def _sample_action_from_module(self, state):
+        from ray.rllib.utils.spaces.space_utils import (
+            clip_action, get_base_struct_from_space, unsquash_action
+        )
+
         # observations are flattened as by the FlattenObservations connector
         obs = np.concatenate([np.ravel(value) for value in state.values()])
         obs = torch.as_tensor(obs, dtype=torch.float32)[None]
         module = self.algo.get_module()
-        output = module.forward_inference({'obs': obs})
-        dist = module.get_inference_action_dist_cls().from_logits(
-            output['action_dist_inputs'])
-        if self.deterministic:
-            dist = dist.to_deterministic()
-        return RLLibAgent._unbatch(dist.sample())
+        with torch.no_grad():
+            output = module.forward_inference({'obs': obs})
+            dist = module.get_inference_action_dist_cls().from_logits(
+                output['action_dist_inputs'])
+            if self.deterministic:
+                dist = dist.to_deterministic()
+            actions = RLLibAgent._unbatch(dist.sample())
+
+        # map actions to the env's bounds, as by the NormalizeAndClipActions connector
+        config = self.algo.config
+        space = get_base_struct_from_space(module.action_space)
+        if getattr(config, 'normalize_actions', False):
+            actions = unsquash_action(actions, space)
+        elif getattr(config, 'clip_actions', False):
+            actions = clip_action(actions, space)
+        return actions
 
     @staticmethod
     def _unbatch(actions):

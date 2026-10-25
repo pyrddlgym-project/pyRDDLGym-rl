@@ -6,7 +6,7 @@ from typing import Any, Dict, Iterable, Optional, Tuple, Type, Union
 import gymnasium as gym
 import stable_baselines3
 from stable_baselines3.common.base_class import BaseAlgorithm
-from stable_baselines3.common.callbacks import BaseCallback
+from stable_baselines3.common.callbacks import BaseCallback, ConvertCallback
 from stable_baselines3.common.logger import HumanOutputFormat, KVWriter
 
 from pyRDDLGym_rl.core.agent import StableBaselinesAgent
@@ -76,6 +76,7 @@ class TrainingProgressCallback(BaseCallback):
         self.columns = columns
         self.refresh_per_second = refresh_per_second
         self.hidden_keys = hidden_keys
+        self._display = None
 
     def _on_training_start(self) -> None:
 
@@ -104,8 +105,16 @@ class TrainingProgressCallback(BaseCallback):
         return True
 
     def _on_training_end(self) -> None:
+        self.close()
+
+    def close(self) -> None:
+        '''Stops the display and restores the logger outputs, which is called at
+        the end of training, but must be called if training ends by an exception.'''
+        if self._display is None:
+            return
         self._display.update(self.model.num_timesteps - self._start)
         self._display.stop()
+        self._display = None
 
         # restore the original logger outputs
         logger = self.model.logger
@@ -153,14 +162,25 @@ class StableBaselinesTrainer:
         in addition to the progress display
         :param **learn_kwargs: other arguments passed to the algorithm's learn()
         '''
-        if self.progress:
-            if callback is None:
-                callback = []
-            elif not isinstance(callback, list):
-                callback = [callback]
-            callback = callback + [TrainingProgressCallback(**self.progress_kwargs)]
-        return self.model.learn(total_timesteps=total_timesteps, callback=callback,
-                                **learn_kwargs)
+        if not self.progress:
+            return self.model.learn(total_timesteps=total_timesteps, callback=callback,
+                                    **learn_kwargs)
+
+        # in a list, functions must be converted to callbacks
+        if callback is None:
+            callback = []
+        elif not isinstance(callback, list):
+            callback = [callback]
+        callback = [c if isinstance(c, BaseCallback) else ConvertCallback(c)
+                    for c in callback]
+
+        # stop the display even if training ends by an exception (e.g. interrupted)
+        progress = TrainingProgressCallback(**self.progress_kwargs)
+        try:
+            return self.model.learn(total_timesteps=total_timesteps,
+                                    callback=callback + [progress], **learn_kwargs)
+        finally:
+            progress.close()
 
     def agent(self, deterministic: bool=True) -> StableBaselinesAgent:
         '''Returns the trained agent as a RDDL policy, e.g. for evaluation.
