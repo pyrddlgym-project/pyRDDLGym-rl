@@ -20,15 +20,9 @@ from ray.rllib.algorithms.sac import SACConfig
 import pyRDDLGym
 from pyRDDLGym_rl.core.agent import RLLibAgent
 from pyRDDLGym_rl.core.env import SimplifiedActionRDDLEnv
+from pyRDDLGym_rl.core.progress import TrainingProgress, rllib_metrics
 
 METHODS = {'dqn': DQNConfig, 'ppo': PPOConfig, 'sac': SACConfig}
-
-
-def episode_return(result, stat):
-    '''Returns a statistic of the episode returns from the result of a training
-    iteration, whose name and location depend on the version of rllib.'''
-    stats = result.get('env_runners', result)
-    return stats.get(f'episode_return_{stat}', stats.get(f'episode_reward_{stat}'))
 
 
 def main(domain, instance, method, iters=20):
@@ -53,12 +47,9 @@ def main(domain, instance, method, iters=20):
     algo = getattr(config, 'build_algo', config.build)()
 
     # train agent
-    for n in range(iters):
-        result = algo.train()
-        print(f'iteration {n + 1} '
-              f'/ min {episode_return(result, "min")} '
-              f'/ mean {episode_return(result, "mean")} '
-              f'/ max {episode_return(result, "max")}')
+    with TrainingProgress(type(algo).__name__, total=iters, unit='iter') as progress:
+        for n in range(iters):
+            progress.update(n + 1, rllib_metrics(algo.train()))
 
     # wrap the agent in a RDDL policy and evaluate
     env = pyRDDLGym.make(domain, instance, base_class=SimplifiedActionRDDLEnv)
