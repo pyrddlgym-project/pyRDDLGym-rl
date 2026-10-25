@@ -83,9 +83,7 @@ class RLLibTrainer:
         have already been set; if the config already has an env_to_module_connector,
         it must flatten the Dict observations
         :param env_kwargs: other arguments passed to pyRDDLGym.make() to create
-        each SimplifiedActionRDDLEnv, e.g. the action_mode; the environment
-        created by the trainer for evaluation (env) also prints its summary,
-        unless print_summary is False
+        each SimplifiedActionRDDLEnv, e.g. the action_mode, which is 'auto' by default
         :param progress: whether to show a progress bar and table of metrics
         :param progress_kwargs: arguments passed to the TrainingProgress display
         :param **training_kwargs: arguments passed to the config's training(),
@@ -102,8 +100,9 @@ class RLLibTrainer:
         else:
             config = method
 
-        # the environment is created by name in each env runner
-        env_kwargs = env_kwargs or {}
+        # the environment is created by name in each env runner, where mixed real
+        # and discrete actions are a single Box since most algorithms don't support Dict
+        env_kwargs = {'action_mode': 'auto', **(env_kwargs or {})}
         self.env = pyRDDLGym.make(domain, instance, base_class=SimplifiedActionRDDLEnv,
                                   **env_kwargs)
         register_env(ENV_NAME, _env_creator)

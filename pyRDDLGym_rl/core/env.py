@@ -18,7 +18,7 @@ class SimplifiedActionRDDLEnv(RDDLEnv):
     '''A gym environment class for RDDL domains, modified to compact the
     action space to avoid the use of Dict space.'''
 
-    ACTION_MODES = ('dict', 'box', 'discrete')
+    ACTION_MODES = ('dict', 'box', 'discrete', 'auto')
 
     def __init__(self, domain: str,
                  instance: str,
@@ -54,7 +54,9 @@ class SimplifiedActionRDDLEnv(RDDLEnv):
         selected, and real actions keep their bounds (supported by e.g. PPO, SAC, TD3);
         'discrete': all actions are a single Discrete or MultiDiscrete space,
         where each real action is discretized into num_bins evenly spaced values
-        between its bounds (supported by e.g. PPO, A2C)
+        between its bounds (supported by e.g. PPO, A2C);
+        'auto': 'box' if there are both real and other actions, which 'dict'
+        would combine in a Dict space that most algorithms do not support, else 'dict'
         :param num_bins: number of values of each real action if action_mode is 'discrete'
         :param normalize_actions: whether real actions are represented in [-1, 1]
         and rescaled to their bounds, which requires all bounds to be finite,
@@ -124,8 +126,14 @@ class SimplifiedActionRDDLEnv(RDDLEnv):
                 limits = np.finfo(space.dtype)
             self._obs_limits[var] = (limits.min, limits.max)
 
-        # construct the gym action space
+        # construct the gym action space, using a single Box in auto mode if the
+        # actions would otherwise be combined in a Dict space
+        if self.action_mode == 'auto':
+            ranges = set(self._action_ranges.values())
+            mixed = 'real' in ranges and len(ranges) > 1
+            self.action_mode = 'box' if mixed else 'dict'
         self.action_space = self._rddl_to_gym_bounds_act(self._action_ranges)
+        
         if print_summary:
             print(self.summarize_spaces())
 
