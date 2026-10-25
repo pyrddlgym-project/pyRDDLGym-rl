@@ -27,6 +27,12 @@ pip install -U "ray[rllib]"
 pip install rddlrepository pyRDDLGym-rl
 ```
 
+or equivalently, with the reinforcement learning framework installed as an extra:
+
+```shell
+pip install rddlrepository "pyRDDLGym-rl[sb3]"    # or "pyRDDLGym-rl[rllib]"
+```
+
 ## Running the Basic Examples
 
 ### Stable Baselines 3
