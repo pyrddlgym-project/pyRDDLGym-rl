@@ -22,8 +22,6 @@ class SimplifiedActionRDDLEnv(RDDLEnv):
 
     def __init__(self, domain: str,
                  instance: str,
-                 enforce_action_constraints: bool=False,
-                 enforce_action_count_non_bool: bool=False,
                  debug_path: str=None,
                  log_path: str=None,
                  backend: typing.Type=RDDLSimulator,
@@ -37,12 +35,6 @@ class SimplifiedActionRDDLEnv(RDDLEnv):
 
         :param domain: the RDDL domain, or a compiled RDDLLiftedModel
         :param instance: the RDDL instance
-        :param enforce_action_constraints: whether to raise an exception if the
-        action constraints are violated
-        :param enforce_action_count_non_bool: whether to include non-bool actions
-        in check that number of nondef actions don't exceed max-nondef-actions
-        (the simplified action space only enforces max-nondef-actions on bool
-        actions, so setting this to True can raise exceptions during training)
         :param debug_path: absolute path to file where debug log is saved,
         excluding the file extension, None means no debugging
         :param log_path: absolute path to file where simulation log is saved,
@@ -51,11 +43,7 @@ class SimplifiedActionRDDLEnv(RDDLEnv):
         simulation (currently supports numpy and Jax)
         :param backend_kwargs: dictionary of additional named arguments to
         pass to backend (must not include logger)
-        :param action_mode: how actions are represented, one of the following,
-        where if max-nondef-actions is less than the number of bool actions, the
-        bool actions are replaced by max-nondef-actions selectors, each choosing
-        one bool action to set or none, so that exactly the valid combinations
-        of bool actions can be chosen:
+        :param action_mode: how actions are represented, one of the following:
         'dict': bool, int and enum actions are a Discrete or MultiDiscrete space
         and real actions are a Box space, combined in a Dict space only if both
         are present (supported by e.g. RLlib);
@@ -70,10 +58,7 @@ class SimplifiedActionRDDLEnv(RDDLEnv):
         :param num_bins: number of values of each real action if action_mode is 'discrete'
         :param normalize_actions: whether real actions are represented in [-1, 1]
         and rescaled to their bounds, which requires all bounds to be finite,
-        and has no effect if action_mode is 'discrete': this is only useful for
-        algorithms that clip rather than rescale actions (e.g. PPO, A2C in
-        stable baselines), since off-policy stable baselines algorithms and
-        RLlib already rescale actions
+        and has no effect if action_mode is 'discrete'
         :param print_summary: whether to print a summary of the observation and
         action spaces when the environment is created
         :param **kwargs: other arguments to pass to RDDLEnv (e.g. preprocessor)
@@ -91,15 +76,14 @@ class SimplifiedActionRDDLEnv(RDDLEnv):
         self.num_bins = num_bins
         self.normalize_actions = normalize_actions
 
-        # objects must be returned as integer indices to be valid observations
+        # some required arguments
         backend_kwargs = dict(backend_kwargs or {})
         backend_kwargs.setdefault('objects_as_strings', False)
+        kwargs.setdefault('enforce_action_count_non_bool', False)
 
         super(SimplifiedActionRDDLEnv, self).__init__(
             domain=domain,
             instance=instance,
-            enforce_action_constraints=enforce_action_constraints,
-            enforce_action_count_non_bool=enforce_action_count_non_bool,
             vectorized=True,
             debug_path=debug_path,
             log_path=log_path,
@@ -118,7 +102,18 @@ class SimplifiedActionRDDLEnv(RDDLEnv):
             state_ranges = self.model.observ_ranges
         else:
             state_ranges = self.model.state_ranges
-        self.observation_space = Dict(dict(self._rddl_to_gym_bounds(state_ranges)))
+
+        # state invariants end the episode when they are violated, so they do not
+        # bound the last observation: real and int fluents are unbounded instead
+        spaces = dict(self._rddl_to_gym_bounds(state_ranges))
+        for (var, prange) in state_ranges.items():
+            space = spaces[var]
+            if prange == 'real':
+                spaces[var] = Box(-np.inf, np.inf, shape=space.shape, dtype=space.dtype)
+            elif prange == 'int':
+                limits = np.iinfo(space.dtype)
+                spaces[var] = Box(limits.min, limits.max, shape=space.shape, dtype=space.dtype)
+        self.observation_space = Dict(spaces)
 
         # observations outside the range of the dtype are saturated instead of overflow
         self._obs_limits = {}
@@ -587,8 +582,7 @@ class SimplifiedActionRDDLEnv(RDDLEnv):
             result += f'    num_bins                     ={self.num_bins}\n'
         else:
             result += f'    normalize_actions            ={self.normalize_actions}\n'
-        result += (f'    enforce_action_constraints   ={self.enforce_action_constraints}\n'
-                   f'    enforce_action_count_non_bool={self.enforce_count_non_bool}\n')
+        result += f'    enforce_action_count_non_bool={self.enforce_count_non_bool}\n'
 
         # observation space: one entry per state or observ-fluent
         fluent_type = 'observ-fluents' if self.sampler.is_pomdp else 'state-fluents'
@@ -633,8 +627,21 @@ class SimplifiedActionRDDLEnv(RDDLEnv):
         obs, info = super(SimplifiedActionRDDLEnv, self).reset(seed=seed, options=options)
         return self._gym_observation(obs), info
 
+    def _valid_actions(self, actions):
+        sim_actions = self.sampler.prepare_actions_for_sim(actions)
+        noop_actions = self.sampler.noop_actions
+        count = sum(np.count_nonzero(sim_actions[var] != noop_actions[var])
+                    for (var, prange) in self._action_ranges.items()
+                    if self.enforce_count_non_bool or prange == 'bool')
+        return count <= self.max_allowed_actions and \
+            self.sampler.check_action_preconditions(sim_actions, silent=True)
+
     def step(self, actions):
         actions = self._gym_to_rddl_actions(actions)
+        valid = self.done or self._valid_actions(actions)
+        if not valid:
+            actions = {}
         obs, reward, terminated, truncated, info = \
             super(SimplifiedActionRDDLEnv, self).step(actions)
+        info['action_valid'] = valid
         return self._gym_observation(obs), reward, terminated, truncated, info

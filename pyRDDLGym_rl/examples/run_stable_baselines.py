@@ -22,9 +22,7 @@ from pyRDDLGym_rl.core.sb3_trainer import METHODS, StableBaselinesTrainer
 def main(domain, instance, method, steps=200000, learning_rate=None):
 
     # set up the environment
-    env = pyRDDLGym.make(domain, instance,
-                         base_class=SimplifiedActionRDDLEnv,
-                         enforce_action_constraints=True)
+    env = pyRDDLGym.make(domain, instance, base_class=SimplifiedActionRDDLEnv)
 
     # train the agent
     kwargs = {}
