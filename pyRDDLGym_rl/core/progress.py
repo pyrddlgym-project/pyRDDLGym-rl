@@ -1,5 +1,4 @@
 import atexit
-import numbers
 from typing import Any, Dict, Optional
 
 try:
@@ -88,8 +87,7 @@ class TrainingProgress:
         self._live.start()
         atexit.register(self.stop)
 
-    def update(self, completed: float,
-               metrics: Optional[Dict[str, Any]]=None) -> None:
+    def update(self, completed: float, metrics: Optional[Dict[str, Any]]=None) -> None:
         '''Updates the progress, and optionally replaces the metrics shown.
 
         :param completed: the amount of training completed
@@ -129,8 +127,7 @@ class TrainingProgress:
             section, _, name = key.rpartition('/')
             sections.setdefault(section, []).append((name, value))
         if not sections:
-            return Padding(Text('waiting for the first metrics...', style='dim'),
-                           (0, 0, 0, 2))
+            return Padding(Text('waiting for the first metrics...', style='dim'), (0, 0, 0, 2))
 
         # each section is a header, followed by its metrics indented below it
         renderables = []
@@ -160,36 +157,3 @@ class TrainingProgress:
 
     def _renderable(self):
         return Group(self._progress, self._metrics_table())
-
-
-def rllib_metrics(result: Dict[str, Any]) -> Dict[str, Any]:
-    '''Returns the episode and learner statistics reported by rllib in the result
-    of a training iteration, keyed by 'section/name' as rllib names them.
-
-    :param result: the dictionary returned by rllib's Algorithm.train()
-    '''
-
-    # episode statistics are under env_runners, or at the top level before ray 2.10
-    stats = result.get('env_runners', result)
-    sections = {'env_runners': {name: value for (name, value) in stats.items()
-                                if name.startswith(('episode', 'num_episodes'))}}
-
-    # learner statistics are per module in the new API stack, else per policy
-    learners = result.get('learners', None)
-    if learners is not None:
-        for (module, stats) in learners.items():
-            if module != '__all_modules__':
-                sections[f'learners/{module}'] = stats
-    else:
-        for (policy, stats) in result.get('info', {}).get('learner', {}).items():
-            sections[f'info/learner/{policy}'] = stats.get('learner_stats', stats)
-
-    # keep only the numbers directly in each section, as python numbers
-    metrics = {}
-    for (section, stats) in sections.items():
-        for (name, value) in stats.items():
-            if isinstance(value, numbers.Number) and not isinstance(value, bool):
-                if hasattr(value, 'item'):
-                    value = value.item()
-                metrics[f'{section}/{name}'] = value
-    return metrics

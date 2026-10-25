@@ -1,9 +1,9 @@
 '''In this example, the stable baselines package is used to train an RL agent.
-    
+
 The syntax for running this example is:
 
     python run_stable_baselines.py <domain> <instance> <method> [<steps>] [<learning_rate>]
-    
+
 where:
     <domain> is the name of a domain located in the /Examples directory
     <instance> is the instance number
@@ -12,45 +12,39 @@ where:
     <learning_rate> is the learning rate to use to train the agent
 '''
 import sys
-from stable_baselines3 import *
 
 import pyRDDLGym
 
-from pyRDDLGym_rl.core.agent import StableBaselinesAgent
-from pyRDDLGym_rl.core.callbacks import TrainingProgressCallback
 from pyRDDLGym_rl.core.env import SimplifiedActionRDDLEnv
+from pyRDDLGym_rl.core.sb3_trainer import METHODS, StableBaselinesTrainer
 
-METHODS = {'a2c': A2C, 'ddpg': DDPG, 'dqn': DQN, 'ppo': PPO, 'sac': SAC, 
-           'td3': TD3}
 
 def main(domain, instance, method, steps=200000, learning_rate=None):
-    
+
     # set up the environment
-    env = pyRDDLGym.make(domain, instance, 
+    env = pyRDDLGym.make(domain, instance,
                          base_class=SimplifiedActionRDDLEnv,
                          enforce_action_constraints=True)
-    
-    # train the PPO agent
-    kwargs = {'verbose': 0}
+
+    # train the agent
+    kwargs = {}
     if learning_rate is not None:
         kwargs['learning_rate'] = learning_rate
-    model = METHODS[method]('MultiInputPolicy', env, **kwargs)
-    model.learn(total_timesteps=steps, callback=TrainingProgressCallback())
-    
+    trainer = StableBaselinesTrainer(env, method, **kwargs)
+    trainer.train(steps)
+
     # wrap the agent in a RDDL policy and evaluate
-    ppo_agent = StableBaselinesAgent(model)
-    ppo_agent.evaluate(env, episodes=1, verbose=True, render=True)
-    
+    trainer.agent().evaluate(env, episodes=1, verbose=True, render=True)
     env.close()
-        
-        
+
+
 if __name__ == "__main__":
     args = sys.argv[1:]
     if len(args) < 3:
         print('python run_stable_baselines.py <domain> <instance> <method> [<steps>] [<learning_rate>]')
         exit(1)
-    if args[2] not in METHODS:
-        print(f'<method> in {set(METHODS.keys())}')
+    if args[2].lower() not in METHODS:
+        print(f'<method> in {sorted(METHODS)}')
         exit(1)
     kwargs = {'domain': args[0], 'instance': args[1], 'method': args[2]}
     if len(args) >= 4: kwargs['steps'] = int(args[3])
