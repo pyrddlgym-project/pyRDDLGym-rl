@@ -22,8 +22,9 @@ from pyRDDLGym_rl.core.sb3_trainer import METHODS, StableBaselinesTrainer
 def main(domain, instance, method, steps=200000, learning_rate=None):
 
     # set up the environment
+    action_mode = 'box' if method.lower() in ('ddpg', 'sac', 'td3') else 'auto'
     env = pyRDDLGym.make(domain, instance, base_class=SimplifiedActionRDDLEnv,
-                         action_mode='auto')
+                         action_mode=action_mode)
 
     # train the agent
     kwargs = {}

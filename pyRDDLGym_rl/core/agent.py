@@ -18,6 +18,13 @@ class StableBaselinesAgent(BaseAgent):
         return actions
 
 
+def flatten_observations(*_args, **_kwargs):
+    '''Creates rllib's connector that flattens the Dict observations, which is the
+    only env-to-module connector that RLLibAgent reproduces.'''
+    from ray.rllib.connectors.env_to_module import FlattenObservations
+    return FlattenObservations()
+
+
 class RLLibAgent(BaseAgent):
     use_tensor_obs = True
 
@@ -26,7 +33,17 @@ class RLLibAgent(BaseAgent):
         self.deterministic = deterministic
 
         # the new API stack (default in recent rllib) replaces policies by modules
-        self.use_module = getattr(algo.config, 'enable_rl_module_and_learner', False)
+        config = algo.config
+        self.use_module = getattr(config, 'enable_rl_module_and_learner', False)
+
+        # the connectors are not run here, so custom ones would be silently ignored
+        if self.use_module and (
+                getattr(config, '_env_to_module_connector', None)
+                not in (None, flatten_observations)
+                or getattr(config, '_module_to_env_connector', None) is not None):
+            raise NotImplementedError(
+                'RLLibAgent does not support custom connectors, only the default '
+                'ones with flattened observations as set by RLLibTrainer.')
 
     def sample_action(self, state):
         if self.use_module:
@@ -48,11 +65,17 @@ class RLLibAgent(BaseAgent):
         module = self.algo.get_module()
         with torch.no_grad():
             output = module.forward_inference({'obs': obs})
-            dist = module.get_inference_action_dist_cls().from_logits(
-                output['action_dist_inputs'])
-            if self.deterministic:
-                dist = dist.to_deterministic()
-            actions = RLLibAgent._unbatch(dist.sample())
+
+            # some modules return the actions directly (e.g. DQN), as handled by
+            # the GetActions connector, else they are sampled from the distribution
+            if 'actions' in output:
+                actions = RLLibAgent._unbatch(output['actions'])
+            else:
+                dist = module.get_inference_action_dist_cls().from_logits(
+                    output['action_dist_inputs'])
+                if self.deterministic:
+                    dist = dist.to_deterministic()
+                actions = RLLibAgent._unbatch(dist.sample())
 
         # map actions to the env's bounds, as by the NormalizeAndClipActions connector
         config = self.algo.config

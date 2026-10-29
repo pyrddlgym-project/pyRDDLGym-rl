@@ -7,7 +7,7 @@ from ray.rllib.algorithms.algorithm_config import AlgorithmConfig
 from ray.rllib.algorithms.registry import ALGORITHMS
 
 import pyRDDLGym
-from pyRDDLGym_rl.core.agent import RLLibAgent
+from pyRDDLGym_rl.core.agent import RLLibAgent, flatten_observations
 from pyRDDLGym_rl.core.env import SimplifiedActionRDDLEnv
 from pyRDDLGym_rl.core.progress import TrainingProgress
 
@@ -80,8 +80,9 @@ class RLLibTrainer:
         :param method: the algorithm to train, either a name in METHODS (e.g. 'ppo',
         case insensitive), a rllib algorithm or algorithm config class, or a
         config instance on which other settings (e.g. resources or env runners)
-        have already been set; if the config already has an env_to_module_connector,
-        it must flatten the Dict observations
+        have already been set (the config is copied, not modified); if the config
+        already has an env_to_module_connector, it must flatten the Dict observations,
+        and the trained agent cannot be evaluated by agent()
         :param env_kwargs: other arguments passed to pyRDDLGym.make() to create
         each SimplifiedActionRDDLEnv, e.g. the action_mode, which is 'auto' by default
         :param progress: whether to show a progress bar and table of metrics
@@ -98,7 +99,7 @@ class RLLibTrainer:
         elif isinstance(method, type):
             config = method()
         else:
-            config = method
+            config = method.copy(copy_frozen=False)
 
         # the environment is created by name in each env runner, where mixed real
         # and discrete actions are a single Box since most algorithms don't support Dict
@@ -113,9 +114,7 @@ class RLLibTrainer:
         # unless a connector was already set
         if getattr(config, 'enable_env_runner_and_connector_v2', False) \
         and getattr(config, '_env_to_module_connector', None) is None:
-            from ray.rllib.connectors.env_to_module import FlattenObservations
-            config = config.env_runners(
-                env_to_module_connector=lambda *_args, **_kwargs: FlattenObservations())
+            config = config.env_runners(env_to_module_connector=flatten_observations)
         if training_kwargs:
             config = config.training(**training_kwargs)
 
@@ -147,3 +146,8 @@ class RLLibTrainer:
         :param deterministic: whether to choose actions deterministically
         '''
         return RLLibAgent(self.algo, deterministic=deterministic)
+
+    def close(self) -> None:
+        '''Stops the rllib algorithm and its env runners, and closes the environment.'''
+        self.algo.stop()
+        self.env.close()

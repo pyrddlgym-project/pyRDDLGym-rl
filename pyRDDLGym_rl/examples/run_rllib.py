@@ -15,15 +15,16 @@ import sys
 from pyRDDLGym_rl.core.rllib_trainer import METHODS, RLLibTrainer
 
 
-def main(domain, instance, method, iters=20):
+def main(domain, instance, method, iters=30):
 
     # train the agent
-    trainer = RLLibTrainer(domain, instance, method)
+    env_kwargs = {'action_mode': 'box'} if method.lower() == 'sac' else None
+    trainer = RLLibTrainer(domain, instance, method, env_kwargs=env_kwargs)
     trainer.train(iters)
 
     # wrap the agent in a RDDL policy and evaluate
     trainer.agent().evaluate(trainer.env, episodes=1, verbose=True, render=True)
-    trainer.env.close()
+    trainer.close()
 
 
 if __name__ == "__main__":

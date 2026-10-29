@@ -46,7 +46,7 @@ python -m pyRDDLGym_rl.examples.run_stable_baselines <domain> <instance> <method
 where:
 - ``<domain>`` is the name of the domain in rddlrepository, or a path pointing to a ``domain.rddl`` file
 - ``<instance>`` is the name of the instance in rddlrepository, or a path pointing to an ``instance.rddl`` file
-- ``<method>`` is the RL algorithm to use [a2c, ddpg, dqn, ppo, sac, td3]
+- ``<method>`` is the RL algorithm to use
 - ``<steps>`` is the (optional) number of samples to generate from the environment for training, and
 - ``<learning_rate>`` is the (optional) learning rate to specify for the algorithm.
 
@@ -61,7 +61,7 @@ python -m pyRDDLGym_rl.examples.run_rllib <domain> <instance> <method> <iters>
 where:
 - ``<domain>`` is the name of the domain in rddlrepository, or a path pointing to a ``domain.rddl`` file
 - ``<instance>`` is the name of the instance in rddlrepository, or a path pointing to an ``instance.rddl`` file
-- ``<method>`` is the RL algorithm to use [dqn, ppo, sac]
+- ``<method>`` is the RL algorithm to use
 - ``<iters>`` is the (optional) number of iterations of training
 
 ## Creating an Environment

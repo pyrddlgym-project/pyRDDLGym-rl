@@ -367,6 +367,13 @@ class SimplifiedActionRDDLEnv(RDDLEnv):
     def _decode_dict_action(self, action):
         if not isinstance(action, dict):
             action = {self._action_keys[0]: action}
+
+        # e.g. RDDL action-fluents would otherwise silently decode to a no-op
+        unknown = set(action) - set(self._action_keys)
+        if unknown:
+            raise RDDLInvalidActionError(
+                f'Action keys {unknown} are not valid, must be in {self._action_keys} '
+                f'as in the gym action space, not the RDDL action-fluents.')
         cont = self._denormalize_cont_action(action.get('continuous', None))
         return action.get('discrete', None), cont
 
@@ -532,7 +539,7 @@ class SimplifiedActionRDDLEnv(RDDLEnv):
         elif prange == 'bool':
             description = 'bool'
             if box:
-                description += ', true if > 0'
+                description += ', true if >= 0'
         elif prange == 'int':
             low = self._disc_start[start:start + count]
             high = low + self._disc_nelem[start:start + count] - 1
