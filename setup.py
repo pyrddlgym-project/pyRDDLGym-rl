@@ -19,7 +19,7 @@ long_description = (Path(__file__).parent / "README.md").read_text()
 
 setup(
       name='pyRDDLGym-rl',
-      version='0.2',
+      version='0.3',
       author="Michael Gimelfarb, Ayal Taitler, Scott Sanner",
       author_email="mike.gimelfarb@mail.utoronto.ca, ataitler@gmail.com, ssanner@mie.utoronto.ca",
       description="pyRDDLGym-rl: Wrappers for reinforcement learning algorithms (i.e. stable baselines 3) to work with pyRDDLGym.",
