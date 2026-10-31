@@ -1,9 +1,9 @@
 '''In this example, the rllib package is used to train an RL agent.
-    
+
 The syntax for running this example is:
 
     python run_rllib.py <domain> <instance> <method> [<iters>]
-    
+
 where:
     <domain> is the name of a domain located in the /Examples directory
     <instance> is the instance number
@@ -12,54 +12,28 @@ where:
 '''
 import sys
 
-from ray.tune.registry import register_env
-from ray.rllib.algorithms.dqn import DQNConfig
-from ray.rllib.algorithms.ppo import PPOConfig
-from ray.rllib.algorithms.sac import SACConfig
-
-import pyRDDLGym
-from pyRDDLGym_rl.core.agent import RLLibAgent
-from pyRDDLGym_rl.core.env import SimplifiedActionRDDLEnv
-
-METHODS = {'dqn': DQNConfig, 'ppo': PPOConfig, 'sac': SACConfig}
+from pyRDDLGym_rl.core.rllib_trainer import METHODS, RLLibTrainer
 
 
-def main(domain, instance, method, iters=20):
-    
-    # set up the environment
-    def env_creator(env_config):
-        return pyRDDLGym.make(env_config['domain'], env_config['instance'],
-                              base_class=SimplifiedActionRDDLEnv)    
+def main(domain, instance, method, iters=30):
 
-    register_env('RLLibEnv', env_creator)
-    
-    # create agent
-    env_config = {'domain': domain, 'instance': instance}
-    config = METHODS[method]()
-    config = config.rollouts(num_rollout_workers=1)
-    config = config.environment('RLLibEnv', env_config=env_config)
-    algo = config.build()
-    
-    # train agent
-    for n in range(iters):
-        result = algo.train()
-        print(f'iteration {n + 1} '
-              f'/ min {result["episode_reward_min"]} '
-              f'/ mean {result["episode_reward_mean"]} '
-              f'/ max {result["episode_reward_max"]}')
-    
+    # train the agent
+    env_kwargs = {'action_mode': 'box'} if method.lower() == 'sac' else None
+    trainer = RLLibTrainer(domain, instance, method, env_kwargs=env_kwargs)
+    trainer.train(iters)
+
     # wrap the agent in a RDDL policy and evaluate
-    RLLibAgent(algo).evaluate(env_creator(env_config),
-                              episodes=1, verbose=True, render=True)
-            
-        
+    trainer.agent().evaluate(trainer.env, episodes=1, verbose=True, render=True)
+    trainer.close()
+
+
 if __name__ == "__main__":
     args = sys.argv[1:]
     if len(args) < 3:
         print('python run_rllib.py <domain> <instance> <method> [<iters>]')
         exit(1)
-    if args[2] not in METHODS:
-        print(f'<method> in {set(METHODS.keys())}')
+    if args[2].lower() not in METHODS:
+        print(f'<method> in {sorted(METHODS)}')
         exit(1)
     kwargs = {'domain': args[0], 'instance': args[1], 'method': args[2]}
     if len(args) >= 4: kwargs['iters'] = int(args[3])
