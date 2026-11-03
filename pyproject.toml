@@ -1,0 +1,46 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pyRDDLGym-rl"
+version = "0.2"
+description = "pyRDDLGym-rl: Wrappers for reinforcement learning algorithms (i.e. stable baselines 3) to work with pyRDDLGym."
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.9"
+authors = [
+    {name = "Michael Gimelfarb", email = "mgimelfarb@yahoo.ca"},
+    {name = "Ayal Taitler", email = "ataitler@gmail.com"},
+    {name = "Scott Sanner", email = "ssanner@mie.utoronto.ca"},
+]
+dependencies = [
+    "pyRDDLGym>=2.1",
+    "rich>=12.3.0",
+    "termcolor>=2.2.0",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "Natural Language :: English",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
+[project.optional-dependencies]
+sb3 = ["stable-baselines3>=2.2.1"]
+rllib = ["ray[rllib]>=2.9.2", "torch"]
+
+[project.urls]
+Homepage = "https://github.com/pyrddlgym-project/pyRDDLGym-rl"
+
+[tool.setuptools.packages.find]
+include = ["pyRDDLGym_rl*"]

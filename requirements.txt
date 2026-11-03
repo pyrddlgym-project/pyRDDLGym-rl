@@ -1,3 +1,0 @@
-pyRDDLGym>=2.1
-rich>=12.3.0
-termcolor>=2.2.0
