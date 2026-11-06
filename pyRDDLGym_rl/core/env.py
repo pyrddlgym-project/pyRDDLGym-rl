@@ -82,6 +82,7 @@ class SimplifiedActionRDDLEnv(RDDLEnv):
         backend_kwargs = dict(backend_kwargs or {})
         backend_kwargs.setdefault('objects_as_strings', False)
         kwargs.setdefault('enforce_action_count_non_bool', False)
+        kwargs.setdefault('enforce_action_constraints', False)
 
         super(SimplifiedActionRDDLEnv, self).__init__(
             domain=domain,
