@@ -1,16 +1,28 @@
+<div align="center">
+
 # pyRDDLGym-rl
 
-![Python Version](https://img.shields.io/badge/python-3.8%2B-blue)
+![Python Version](https://img.shields.io/badge/python-3.9%2B-blue)
 [![PyPI Version](https://img.shields.io/pypi/v/pyRDDLGym-rl.svg)](https://pypi.org/project/pyRDDLGym-rl/)
 [![Documentation Status](https://readthedocs.org/projects/pyrddlgym/badge/?version=latest)](https://pyrddlgym.readthedocs.io/en/latest/sb.html)
 ![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)
-[![Cumulative PyPI Downloads](https://img.shields.io/pypi/dm/pyrddlgym-rl)](https://pypistats.org/packages/pyrddlgym-rl)
 
-[Installation](#installation) | [Examples](#running-the-basic-examples) | [Creating Environments](#creating-an-environment)
+**Train deep reinforcement learning agents from Stable Baselines 3 and RLlib on any RDDL problem.**
 
-Provides wrappers for deep reinforcement learning algorithms (i.e. Stable Baselines 3 and RLlib) to work with pyRDDLGym.
+[Why pyRDDLGym-rl?](#why-pyrddlgym-rl) &nbsp;&middot;&nbsp; [Installation](#installation) &nbsp;&middot;&nbsp; [Examples](#running-the-basic-examples) &nbsp;&middot;&nbsp; [Creating an environment](#creating-an-environment)
 
-> [!NOTE]  
+</div>
+
+## Why pyRDDLGym-rl?
+
+- 🔌 **Any problem, any algorithm.** Every problem in [rddlrepository](https://github.com/pyrddlgym-project/rddlrepository), or your own RDDL files, trains with any algorithm in [Stable Baselines 3](https://github.com/DLR-RM/stable-baselines3) (and sb3-contrib) or [RLlib](https://docs.ray.io/en/latest/rllib/index.html).
+- 🎛️ **Action spaces that fit.** RDDL actions become a dictionary, a single box (for PPO, SAC or TD3) or a discrete space (for DQN), and ``auto`` avoids the mixed spaces most algorithms cannot handle.
+- 🛡️ **Constraints handled.** An action that breaks the action preconditions or the limit on concurrent actions is replaced by a no-op instead of crashing training, and flagged in ``info["action_valid"]``.
+- 🔍 **Nothing hidden.** A summary shows how every state and action fluent maps to the observation and action spaces.
+- 📊 **Watch it train.** A live display in the terminal tracks progress and returns as the agent learns.
+- 🎬 **Back to pyRDDLGym.** A trained agent is a pyRDDLGym policy, ready to evaluate, visualize and record like any other.
+
+> [!NOTE]
 > If your environment has differentiable dynamics and a differentiable reward, try the gradient-based [JAX planner](https://github.com/pyrddlgym-project/pyRDDLGym-jax).
 
 ## Installation
