@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pyRDDLGym-rl"
-version = "0.2"
+version = "1.0"
 description = "pyRDDLGym-rl: Wrappers for reinforcement learning algorithms (i.e. stable baselines 3) to work with pyRDDLGym."
 readme = "README.md"
 license = "MIT"
@@ -16,12 +16,12 @@ authors = [
     {name = "Scott Sanner", email = "ssanner@mie.utoronto.ca"},
 ]
 dependencies = [
-    "pyRDDLGym>=2.1",
+    "pyRDDLGym>=3.0",
     "rich>=12.3.0",
     "termcolor>=2.2.0",
 ]
 classifiers = [
-    "Development Status :: 4 - Beta",
+    "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Science/Research",
     "Natural Language :: English",
     "Operating System :: OS Independent",
